@@ -2,23 +2,24 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Premium High-Contrast Neon Cyber Trading Scheme (TradingView Pro Slate)
-val CyberObsidian = Color(0xFF0C1017) // Sleek slate black background
-val CyberSurface = Color(0xFF161C24)  // Modern dark card background
-val CyberSurfaceVariant = Color(0xFF1F2937) // Modern steel card background for inputs
+// Premium High-Contrast "Emerald Jade & Gold" Trading Scheme
+val CyberObsidian = Color(0xFF050E0C)       // Ultra-dark jade obsidian background
+val CyberSurface = Color(0xFF0C1B17)        // Deep rich emerald card background
+val CyberSurfaceVariant = Color(0xFF132A24) // Medium jade container for inputs
 
-val CyberPrimary = Color(0xFF00B2FF) // Vibrant trading neon blue / cyan (Primary action)
-val CyberSecondary = Color(0xFF00E5FF) // Metallic neon teal / cyan
-val CyberTertiary = Color(0xFF8B5CF6) // Royal violet purple for exclusive components
+val CyberPrimary = Color(0xFF00E6A6)        // Vibrant neon mint green (Primary actions/positive buttons)
+val CyberSecondary = Color(0xFF00F5D4)      // Glow cyan-mint accent
+val CyberTertiary = Color(0xFFD8B4FE)       // Royal soft amethyst for special highlights
 
-val CyberGreen = Color(0xFF00E676) // Electric neon green for BUY / TP targets
-val CyberRed = Color(0xFFFF1744) // Electric neon crimson for SELL / Stop Loss
-val CyberGold = Color(0xFFFFD600) // Bright neon gold for VIP / Exclusive tags
+val CyberGreen = Color(0xFF10B981)          // Emerald green for BUY / Target profits
+val CyberRed = Color(0xFFFF3355)            // Hot neon crimson for SELL / Stop Loss
+val CyberGold = Color(0xFFFFC72C)           // Vivid radiant gold for VIP/Premium badges
 
-val CyberTextPrimary = Color(0xFFF1F5F9) // Crisp clean off-white
-val CyberTextSecondary = Color(0xFF94A3B8) // Slate gray for secondary text
-val CyberTextMuted = Color(0xFF64748B) // Subtle steel gray
+val CyberTextPrimary = Color(0xFFECFDF5)    // Crispy clean mint-tinted white
+val CyberTextSecondary = Color(0xFF8BA39C)  // Calm sage green-gray for secondary text
+val CyberTextMuted = Color(0xFF536862)      // Muted moss gray for footnotes
 
-val CyberBorder = Color(0xFF263242) // Subtle metallic teal-gray border
-val CyberGlow = Color(0x2200B2FF) // Neon blue glow alpha
-val CyberGlowRed = Color(0x22FFFF17) // Neon stop-loss glow alpha
+val CyberBorder = Color(0xFF19352F)         // Emerald-tinted thin border
+val CyberGlow = Color(0x2200E6A6)           // Neon mint glow alpha
+val CyberGlowRed = Color(0x22FF3355)        // Stop loss red glow alpha
+
