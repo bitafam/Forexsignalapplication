@@ -1,0 +1,3 @@
+# Ensure binary files are not corrupted by line ending conversions
+*.jar binary
+gradle/wrapper/gradle-wrapper.jar binary
