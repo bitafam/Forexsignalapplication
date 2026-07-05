@@ -24,10 +24,12 @@ jobs:
 
     - name: Grant Execute Permission to Gradle
       run: chmod +x gradlew
-      continue-on-error: true # Safe fallback if wrapper isn't included or is custom
+
+    - name: Decode Debug Keystore
+      run: base64 -d debug.keystore.base64 > debug.keystore
 
     - name: Build with Gradle
-      run: gradle assembleDebug
+      run: ./gradlew assembleDebug
 
     - name: Upload Debug APK Artifact
       uses: actions/upload-artifact@v4
