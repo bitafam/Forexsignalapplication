@@ -2992,6 +2992,8 @@ fun AdminPanelScreen(viewModel: ForexViewModel) {
     val error by viewModel.authError.collectAsState()
     val success by viewModel.authSuccessMessage.collectAsState()
 
+    var adminTab by remember { mutableStateOf("SIGNALS") } // SIGNALS, WALLET, PACKAGES, COUPONS
+
     val pair by viewModel.adminPair.collectAsState()
     val type by viewModel.adminType.collectAsState()
     val entry by viewModel.adminEntry.collectAsState()
@@ -3003,6 +3005,21 @@ fun AdminPanelScreen(viewModel: ForexViewModel) {
     val analysis by viewModel.adminAnalysis.collectAsState()
     val editingSignal by viewModel.editingSignal.collectAsState()
 
+    // Supabase admin management flows state collections
+    val adminNewWalletAddress by viewModel.adminNewWalletAddress.collectAsState()
+    val couponCodeBuilder by viewModel.couponCodeBuilder.collectAsState()
+    val couponDiscountBuilder by viewModel.couponDiscountBuilder.collectAsState()
+    val couponExpiryBuilder by viewModel.couponExpiryBuilder.collectAsState()
+    val packages by viewModel.supabasePackages.collectAsState()
+    val coupons by viewModel.supabaseCoupons.collectAsState()
+
+    val packagePrices = remember { mutableStateMapOf<String, String>() }
+    packages.forEach { pkg ->
+        if (!packagePrices.containsKey(pkg.id)) {
+            packagePrices[pkg.id] = pkg.priceTether.toString()
+        }
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -3012,14 +3029,14 @@ fun AdminPanelScreen(viewModel: ForexViewModel) {
         item {
             // Header
             Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { viewModel.setScreen("dashboard") }) {
                     Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "back", tint = CyberPrimary)
                 }
                 Text(
-                    text = if (editingSignal != null) (if (lang == "fa") "اصلاح و ویرایش سیگنال" else "Edit Signal Mode") else L10n.get("admin_panel", lang),
+                    text = if (lang == "fa") "پنل مدیریت پیشرفته" else "Advanced Admin Control Panel",
                     color = CyberPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
@@ -3028,220 +3045,608 @@ fun AdminPanelScreen(viewModel: ForexViewModel) {
             }
         }
 
+        // Sub-tabs for the Admin Panel options
         item {
-            Column(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, CyberBorder, RoundedCornerShape(12.dp))
-                    .background(CyberSurface, RoundedCornerShape(12.dp))
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(bottom = 16.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Edit Mode Banner Notification
-                if (editingSignal != null) {
-                    Box(
+                val tabs = listOf(
+                    Triple("SIGNALS", if (lang == "fa") "سیگنال‌ها" else "Signals", Icons.Default.TrendingUp),
+                    Triple("WALLET", if (lang == "fa") "آدرس ولت" else "TRON Wallet", Icons.Default.AccountBalanceWallet),
+                    Triple("PACKAGES", if (lang == "fa") "پکیج‌ها" else "Packages", Icons.Default.CardMembership),
+                    Triple("COUPONS", if (lang == "fa") "تخفیف‌ها" else "Coupons", Icons.Default.LocalOffer)
+                )
+
+                tabs.forEach { (tabId, label, icon) ->
+                    val isSelected = adminTab == tabId
+                    Button(
+                        onClick = { adminTab = tabId },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isSelected) CyberPrimary else CyberSurface,
+                            contentColor = if (isSelected) CyberObsidian else CyberTextSecondary
+                        ),
+                        border = BorderStroke(1.dp, if (isSelected) CyberPrimary else CyberBorder),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = label, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Global Success / Error Feedbacks
+        if (error != null || success != null) {
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                        .background(CyberSurface, RoundedCornerShape(8.dp))
+                        .border(1.dp, if (error != null) CyberRed else CyberGreen, RoundedCornerShape(8.dp))
+                        .padding(12.dp)
+                ) {
+                    if (error != null) {
+                        Text(text = error!!, color = CyberRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    if (success != null) {
+                        Text(text = success!!, color = CyberGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        when (adminTab) {
+            "SIGNALS" -> {
+                // Signal Creation / Editing Mode Form
+                item {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 12.dp)
-                            .background(CyberPrimary.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                            .border(1.dp, CyberPrimary, RoundedCornerShape(8.dp))
-                            .padding(12.dp)
+                            .border(1.dp, CyberBorder, RoundedCornerShape(12.dp))
+                            .background(CyberSurface, RoundedCornerShape(12.dp))
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        // Edit Mode Banner Notification
+                        if (editingSignal != null) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 12.dp)
+                                    .background(CyberPrimary.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                                    .border(1.dp, CyberPrimary, RoundedCornerShape(8.dp))
+                                    .padding(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = if (lang == "fa") "⚠️ حالت ویرایش سیگنال فعال است" else "⚠️ Signal Edit Mode Active",
+                                        color = CyberPrimary,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Button(
+                                        onClick = { viewModel.cancelEditing() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = CyberRed),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(26.dp)
+                                    ) {
+                                        Text(
+                                            text = if (lang == "fa") "انصراف" else "Cancel",
+                                            color = Color.White,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Currency Pair Input
+                        OutlinedTextField(
+                            value = pair,
+                            onValueChange = { viewModel.adminPair.value = it },
+                            label = { Text(L10n.get("pair", lang), color = CyberTextSecondary) },
+                            placeholder = { Text("EUR/USD or BTC/USD", color = CyberTextMuted) },
+                            colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberPrimary),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag("admin_pair_input")
+                        )
+
+                        // BUY or SELL toggle
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { viewModel.adminType.value = "BUY" },
+                                colors = ButtonDefaults.buttonColors(containerColor = if (type == "BUY") CyberGreen else CyberSurfaceVariant),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f).testTag("buy_toggle")
+                            ) {
+                                Text(text = "BUY", color = if (type == "BUY") CyberObsidian else CyberTextPrimary, fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = { viewModel.adminType.value = "SELL" },
+                                colors = ButtonDefaults.buttonColors(containerColor = if (type == "SELL") CyberRed else CyberSurfaceVariant),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f).testTag("sell_toggle")
+                            ) {
+                                Text(text = "SELL", color = if (type == "SELL") CyberObsidian else CyberTextPrimary, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        // Entry Price Input
+                        OutlinedTextField(
+                            value = entry,
+                            onValueChange = { viewModel.adminEntry.value = it },
+                            label = { Text(L10n.get("entry", lang), color = CyberTextSecondary) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberPrimary),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag("admin_entry_input")
+                        )
+
+                        // TP1 and TP2 Inputs
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = tp1,
+                                onValueChange = { viewModel.adminTp1.value = it },
+                                label = { Text(L10n.get("tp1", lang), color = CyberTextSecondary) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberPrimary),
+                                modifier = Modifier.weight(1f).padding(vertical = 4.dp).testTag("admin_tp1_input")
+                            )
+                            OutlinedTextField(
+                                value = tp2,
+                                onValueChange = { viewModel.adminTp2.value = it },
+                                label = { Text(L10n.get("tp2", lang), color = CyberTextSecondary) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberPrimary),
+                                modifier = Modifier.weight(1f).padding(vertical = 4.dp).testTag("admin_tp2_input")
+                            )
+                        }
+
+                        // Stop Loss and Timeframe Input
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = sl,
+                                onValueChange = { viewModel.adminSl.value = it },
+                                label = { Text(L10n.get("sl", lang), color = CyberTextSecondary) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberPrimary),
+                                modifier = Modifier.weight(1f).padding(vertical = 4.dp).testTag("admin_sl_input")
+                            )
+                            OutlinedTextField(
+                                value = timeframe,
+                                onValueChange = { viewModel.adminTimeframe.value = it },
+                                label = { Text(L10n.get("timeframe", lang), color = CyberTextSecondary) },
+                                placeholder = { Text("H1 or H4", color = CyberTextMuted) },
+                                colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberPrimary),
+                                modifier = Modifier.weight(1f).padding(vertical = 4.dp).testTag("admin_timeframe_input")
+                            )
+                        }
+
+                        // VIP toggle
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = if (lang == "fa") "⚠️ حالت ویرایش سیگنال فعال است" else "⚠️ Signal Edit Mode Active",
-                                color = CyberPrimary,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
+                            Checkbox(
+                                checked = isVip,
+                                onCheckedChange = { viewModel.adminIsVip.value = it },
+                                colors = CheckboxDefaults.colors(checkedColor = CyberPrimary, uncheckedColor = CyberBorder)
                             )
+                            Text(text = L10n.get("is_vip", lang), color = CyberTextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        // Technical Analysis input description
+                        OutlinedTextField(
+                            value = analysis,
+                            onValueChange = { viewModel.adminAnalysis.value = it },
+                            label = { Text(L10n.get("analysis", lang), color = CyberTextSecondary) },
+                            placeholder = { Text(L10n.get("analysis_desc", lang), color = CyberTextMuted) },
+                            colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberPrimary),
+                            modifier = Modifier.fillMaxWidth().height(100.dp).padding(vertical = 4.dp).testTag("admin_analysis_input")
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // ACTION PUBLISH
+                        val isEditing = editingSignal != null
+                        Button(
+                            onClick = { viewModel.publishAdminSignal() },
+                            colors = ButtonDefaults.buttonColors(containerColor = if (isEditing) CyberSecondary else CyberPrimary),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("publish_signal_button")
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(imageVector = if (isEditing) Icons.Default.Edit else Icons.Default.Publish, contentDescription = "publish", tint = if (isEditing) Color.White else CyberObsidian)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isEditing) {
+                                        if (lang == "fa") "اعمال اصلاحات و بروزرسانی سیگنال" else "Apply Changes & Update Signal"
+                                    } else {
+                                        L10n.get("publish", lang)
+                                    },
+                                    color = if (isEditing) Color.White else CyberObsidian,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        if (isEditing) {
+                            Spacer(modifier = Modifier.height(8.dp))
                             Button(
                                 onClick = { viewModel.cancelEditing() },
-                                colors = ButtonDefaults.buttonColors(containerColor = CyberRed),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier = Modifier.height(26.dp)
+                                colors = ButtonDefaults.buttonColors(containerColor = CyberSurfaceVariant),
+                                border = BorderStroke(1.dp, CyberBorder),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth().height(48.dp)
                             ) {
                                 Text(
-                                    text = if (lang == "fa") "انصراف" else "Cancel",
-                                    color = Color.White,
-                                    fontSize = 10.sp,
+                                    text = if (lang == "fa") "لغو ویرایش و بازگشت" else "Cancel Edit & Reset",
+                                    color = CyberTextPrimary,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
                         }
                     }
                 }
+            }
 
-                // Signals Issue Feedbacks
-                if (error != null) {
+            "WALLET" -> {
+                // TRON Wallet Address Settings Configuration Panel
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, CyberBorder, RoundedCornerShape(12.dp))
+                            .background(CyberSurface, RoundedCornerShape(12.dp))
+                            .padding(18.dp)
+                    ) {
+                        Text(
+                            text = if (lang == "fa") "آدرس ولت دریافت تتر (TRC-20)" else "Tether Receiving Address (TRC-20)",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                        Text(
+                            text = if (lang == "fa") "کاربران به منظور ارتقاء به حساب ویژه VIP، مبالغ خرید اشتراک را مستقیما به این آدرس واریز می‌کنند." else "Users will transfer their subscription fees directly to this secure destination address.",
+                            color = CyberTextSecondary,
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = adminNewWalletAddress,
+                            onValueChange = { viewModel.adminNewWalletAddress.value = it },
+                            placeholder = { Text("T...", color = CyberTextMuted, fontSize = 12.sp) },
+                            colors = TextFieldDefaults.colors(
+                                focusedTextColor = CyberTextPrimary,
+                                unfocusedTextColor = CyberTextSecondary,
+                                focusedContainerColor = CyberObsidian,
+                                unfocusedContainerColor = CyberObsidian,
+                                focusedIndicatorColor = CyberPrimary
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .testTag("admin_wallet_address_input")
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Button(
+                            onClick = { viewModel.adminUpdateWalletAddress() },
+                            colors = ButtonDefaults.buttonColors(containerColor = CyberPrimary),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                        ) {
+                            Text(
+                                text = if (lang == "fa") "بروزرسانی آدرس ولت تتر" else "Update TRON Wallet Address",
+                                color = CyberObsidian,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            "PACKAGES" -> {
+                // Packages management section
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                    ) {
+                        Text(
+                            text = if (lang == "fa") "مدیریت قیمت پکیج‌های اشتراک" else "Subscription Pricing Management",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+
+                        if (packages.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(CyberSurface, RoundedCornerShape(12.dp))
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = CyberPrimary)
+                            }
+                        } else {
+                            packages.forEach { pkg ->
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 12.dp)
+                                        .border(1.dp, CyberBorder, RoundedCornerShape(12.dp)),
+                                    colors = CardDefaults.cardColors(containerColor = CyberSurface),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(14.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = pkg.name,
+                                                color = Color.White,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = if (lang == "fa") "${pkg.durationDays} روزه" else "${pkg.durationDays} Days",
+                                                color = CyberGold,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.height(12.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            OutlinedTextField(
+                                                value = packagePrices[pkg.id] ?: "",
+                                                onValueChange = { packagePrices[pkg.id] = it },
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                colors = TextFieldDefaults.colors(
+                                                    focusedTextColor = CyberTextPrimary,
+                                                    unfocusedTextColor = CyberTextSecondary,
+                                                    focusedContainerColor = CyberObsidian,
+                                                    unfocusedContainerColor = CyberObsidian,
+                                                    focusedIndicatorColor = CyberPrimary
+                                                ),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(44.dp)
+                                            )
+
+                                            Button(
+                                                onClick = {
+                                                    val price = packagePrices[pkg.id]?.toDoubleOrNull()
+                                                    if (price != null) {
+                                                        viewModel.adminUpdatePackagePrice(pkg.id, price)
+                                                    }
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = CyberSecondary),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.height(40.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (lang == "fa") "ذخیره قیمت" else "Save Price",
+                                                    color = CyberObsidian,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            "COUPONS" -> {
+                // Coupons management section
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, CyberBorder, RoundedCornerShape(12.dp))
+                            .background(CyberSurface, RoundedCornerShape(12.dp))
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = if (lang == "fa") "ساخت کد تخفیف جدید" else "Create New Coupon",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Coupon Code string input
+                        OutlinedTextField(
+                            value = couponCodeBuilder,
+                            onValueChange = { viewModel.couponCodeBuilder.value = it },
+                            label = { Text(if (lang == "fa") "کد تخفیف (مثال: NEWYEAR)" else "Coupon Code (e.g. SAVER)", color = CyberTextSecondary, fontSize = 11.sp) },
+                            colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberGold),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag("coupon_code_input")
+                        )
+
+                        // Discount Percentage input
+                        OutlinedTextField(
+                            value = couponDiscountBuilder,
+                            onValueChange = { viewModel.couponDiscountBuilder.value = it },
+                            label = { Text(if (lang == "fa") "درصد تخفیف (مثال: 25)" else "Discount Percentage (e.g. 25)", color = CyberTextSecondary, fontSize = 11.sp) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberGold),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag("coupon_percent_input")
+                        )
+
+                        // Coupon Expiry Date input
+                        OutlinedTextField(
+                            value = couponExpiryBuilder,
+                            onValueChange = { viewModel.couponExpiryBuilder.value = it },
+                            label = { Text(if (lang == "fa") "تاریخ انقضا (فرمت ISO: YYYY-MM-DD)" else "Expiry Date (ISO: YYYY-MM-DD)", color = CyberTextSecondary, fontSize = 11.sp) },
+                            placeholder = { Text("e.g. 2026-12-31", color = CyberTextMuted) },
+                            colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberGold),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag("coupon_expiry_input")
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Button(
+                            onClick = { viewModel.adminCreateCoupon() },
+                            colors = ButtonDefaults.buttonColors(containerColor = CyberGold),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                        ) {
+                            Text(
+                                text = if (lang == "fa") "ایجاد کد تخفیف در سوپابیس" else "Generate Coupon in Database",
+                                color = CyberObsidian,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(18.dp))
                     Text(
-                        text = error!!,
-                        color = CyberRed,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
+                        text = if (lang == "fa") "لیست کدهای تخفیف سیستم" else "Coupons List",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Black,
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
                 }
-                if (success != null) {
-                    Text(
-                        text = success!!,
-                        color = CyberGreen,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
-                }
 
-                // Currency Pair Input
-                OutlinedTextField(
-                    value = pair,
-                    onValueChange = { viewModel.adminPair.value = it },
-                    label = { Text(L10n.get("pair", lang), color = CyberTextSecondary) },
-                    placeholder = { Text("EUR/USD or BTC/USD", color = CyberTextMuted) },
-                    colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberPrimary),
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag("admin_pair_input")
-                )
-
-                // BUY or SELL toggle
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = { viewModel.adminType.value = "BUY" },
-                        colors = ButtonDefaults.buttonColors(containerColor = if (type == "BUY") CyberGreen else CyberSurfaceVariant),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f).testTag("buy_toggle")
-                    ) {
-                        Text(text = "BUY", color = if (type == "BUY") CyberObsidian else CyberTextPrimary, fontWeight = FontWeight.Bold)
+                if (coupons.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(CyberSurface, RoundedCornerShape(12.dp))
+                                .padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (lang == "fa") "هیچ کد تخفیفی یافت نشد." else "No active coupons found.",
+                                color = CyberTextMuted,
+                                fontSize = 12.sp
+                            )
+                        }
                     }
-                    Button(
-                        onClick = { viewModel.adminType.value = "SELL" },
-                        colors = ButtonDefaults.buttonColors(containerColor = if (type == "SELL") CyberRed else CyberSurfaceVariant),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f).testTag("sell_toggle")
-                    ) {
-                        Text(text = "SELL", color = if (type == "SELL") CyberObsidian else CyberTextPrimary, fontWeight = FontWeight.Bold)
-                    }
-                }
+                } else {
+                    items(coupons) { coupon ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 10.dp)
+                                .border(1.dp, CyberBorder, RoundedCornerShape(12.dp)),
+                            colors = CardDefaults.cardColors(containerColor = CyberSurface),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = coupon.code,
+                                            color = Color.White,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Black,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .background(CyberGold.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                                .border(0.8.dp, CyberGold, RoundedCornerShape(4.dp))
+                                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "${coupon.discountPercent}% OFF",
+                                                color = CyberGold,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = if (lang == "fa") "انقضا: ${coupon.expiresAt ?: "همیشگی"}" else "Expires: ${coupon.expiresAt ?: "Never"}",
+                                        color = CyberTextSecondary,
+                                        fontSize = 10.sp
+                                    )
+                                }
 
-                // Entry Price Input
-                OutlinedTextField(
-                    value = entry,
-                    onValueChange = { viewModel.adminEntry.value = it },
-                    label = { Text(L10n.get("entry", lang), color = CyberTextSecondary) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberPrimary),
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag("admin_entry_input")
-                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    IconButton(
+                                        onClick = { viewModel.adminToggleCouponStatus(coupon.id, coupon.isActive) }
+                                    ) {
+                                        Icon(
+                                            imageVector = if (coupon.isActive) Icons.Default.ToggleOn else Icons.Default.ToggleOff,
+                                            contentDescription = "Toggle Coupon",
+                                            tint = if (coupon.isActive) CyberGreen else CyberTextMuted,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
 
-                // TP1 and TP2 Inputs
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = tp1,
-                        onValueChange = { viewModel.adminTp1.value = it },
-                        label = { Text(L10n.get("tp1", lang), color = CyberTextSecondary) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberPrimary),
-                        modifier = Modifier.weight(1f).padding(vertical = 4.dp).testTag("admin_tp1_input")
-                    )
-                    OutlinedTextField(
-                        value = tp2,
-                        onValueChange = { viewModel.adminTp2.value = it },
-                        label = { Text(L10n.get("tp2", lang), color = CyberTextSecondary) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberPrimary),
-                        modifier = Modifier.weight(1f).padding(vertical = 4.dp).testTag("admin_tp2_input")
-                    )
-                }
-
-                // Stop Loss and Timeframe Input
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = sl,
-                        onValueChange = { viewModel.adminSl.value = it },
-                        label = { Text(L10n.get("sl", lang), color = CyberTextSecondary) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberPrimary),
-                        modifier = Modifier.weight(1f).padding(vertical = 4.dp).testTag("admin_sl_input")
-                    )
-                    OutlinedTextField(
-                        value = timeframe,
-                        onValueChange = { viewModel.adminTimeframe.value = it },
-                        label = { Text(L10n.get("timeframe", lang), color = CyberTextSecondary) },
-                        placeholder = { Text("H1 or H4", color = CyberTextMuted) },
-                        colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberPrimary),
-                        modifier = Modifier.weight(1f).padding(vertical = 4.dp).testTag("admin_timeframe_input")
-                    )
-                }
-
-                // VIP toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(
-                        checked = isVip,
-                        onCheckedChange = { viewModel.adminIsVip.value = it },
-                        colors = CheckboxDefaults.colors(checkedColor = CyberPrimary, uncheckedColor = CyberBorder)
-                    )
-                    Text(text = L10n.get("is_vip", lang), color = CyberTextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-
-                // Technical Analysis input description
-                OutlinedTextField(
-                    value = analysis,
-                    onValueChange = { viewModel.adminAnalysis.value = it },
-                    label = { Text(L10n.get("analysis", lang), color = CyberTextSecondary) },
-                    placeholder = { Text(L10n.get("analysis_desc", lang), color = CyberTextMuted) },
-                    colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberPrimary),
-                    modifier = Modifier.fillMaxWidth().height(100.dp).padding(vertical = 4.dp).testTag("admin_analysis_input")
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // ACTION PUBLISH
-                val isEditing = editingSignal != null
-                Button(
-                    onClick = { viewModel.publishAdminSignal() },
-                    colors = ButtonDefaults.buttonColors(containerColor = if (isEditing) CyberSecondary else CyberPrimary),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag("publish_signal_button")
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = if (isEditing) Icons.Default.Edit else Icons.Default.Publish, contentDescription = "publish", tint = if (isEditing) Color.White else CyberObsidian)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (isEditing) {
-                                if (lang == "fa") "اعمال اصلاحات و بروزرسانی سیگنال" else "Apply Changes & Update Signal"
-                            } else {
-                                L10n.get("publish", lang)
-                            },
-                            color = if (isEditing) Color.White else CyberObsidian,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                if (isEditing) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = { viewModel.cancelEditing() },
-                        colors = ButtonDefaults.buttonColors(containerColor = CyberSurfaceVariant),
-                        border = BorderStroke(1.dp, CyberBorder),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth().height(48.dp)
-                    ) {
-                        Text(
-                            text = if (lang == "fa") "لغو ویرایش و بازگشت" else "Cancel Edit & Reset",
-                            color = CyberTextPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
+                                    IconButton(
+                                        onClick = { viewModel.adminDeleteCoupon(coupon.id) }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Delete Coupon",
+                                            tint = CyberRed,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
