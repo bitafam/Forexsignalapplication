@@ -84,6 +84,9 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
     private val _adminWallet = MutableStateFlow<SupabaseService.SupabaseAdminWallet?>(null)
     val adminWallet: StateFlow<SupabaseService.SupabaseAdminWallet?> = _adminWallet.asStateFlow()
 
+    private val _adminProfiles = MutableStateFlow<List<SupabaseService.SupabaseProfile>>(emptyList())
+    val adminProfiles: StateFlow<List<SupabaseService.SupabaseProfile>> = _adminProfiles.asStateFlow()
+
     // Checkout states
     private val _selectedPackage = MutableStateFlow<SupabaseService.SupabasePackage?>(null)
     val selectedPackage: StateFlow<SupabaseService.SupabasePackage?> = _selectedPackage.asStateFlow()
@@ -210,6 +213,12 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
                 if (wallet != null) {
                     adminNewWalletAddress.value = wallet.walletAddress
                 }
+
+                // If user is admin, fetch profiles for user monitoring
+                if (_currentUser.value?.role == "ADMIN") {
+                    val profiles = SupabaseService.getAllProfiles()
+                    _adminProfiles.value = profiles
+                }
             } catch (e: Exception) {
                 Log.e("ForexViewModel", "Error fetching Supabase data: ${e.message}")
             }
@@ -240,7 +249,16 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
                     _accessToken.value = response.accessToken
                     
                     // Fetch real profile details from public.profiles table
-                    val profile = SupabaseService.getProfile(response.userId, response.accessToken)
+                    var profile = SupabaseService.getProfile(response.userId, response.accessToken)
+                    if (profile == null) {
+                        // Profile doesn't exist yet! Attempt to create it using the validated session.
+                        val isFirstAdmin = email.lowercase() == "asalary40@gmail.com"
+                        val roleString = if (isFirstAdmin) "admin" else "user"
+                        val created = SupabaseService.createInitialProfile(response.userId, roleString, response.accessToken)
+                        if (created) {
+                            profile = SupabaseService.getProfile(response.userId, response.accessToken)
+                        }
+                    }
                     val isUserVip = profile?.isVip ?: false
                     val roleString = if (profile?.role?.lowercase() == "admin") "ADMIN" else "USER"
                     
@@ -743,6 +761,40 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
 
             delay(6000)
             _liveNotification.value = null
+        }
+    }
+
+    fun adminUpdateUserProfile(userId: String, role: String, isVip: Boolean, expiryDays: Int?) {
+        viewModelScope.launch {
+            _authError.value = null
+            _authSuccessMessage.value = null
+            try {
+                // Calculate expiry ISO date if VIP and expiryDays is provided
+                val expiryISO = if (isVip && expiryDays != null && expiryDays > 0) {
+                    val ms = System.currentTimeMillis() + expiryDays.toLong() * 24 * 60 * 60 * 1000
+                    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+                        timeZone = java.util.TimeZone.getTimeZone("UTC")
+                    }.format(java.util.Date(ms))
+                } else if (isVip) {
+                    // default to 30 days if vip is true but expiryDays not specified
+                    val ms = System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000
+                    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+                        timeZone = java.util.TimeZone.getTimeZone("UTC")
+                    }.format(java.util.Date(ms))
+                } else {
+                    null
+                }
+
+                val success = SupabaseService.updateProfile(userId, role, isVip, expiryISO)
+                if (success) {
+                    _authSuccessMessage.value = if (_language.value == "fa") "پروفایل کاربر با موفقیت ویرایش شد" else "User profile updated successfully"
+                    refreshSupabaseData()
+                } else {
+                    _authError.value = if (_language.value == "fa") "خطا در ویرایش پروفایل کاربر" else "Failed to update user profile"
+                }
+            } catch (e: Exception) {
+                _authError.value = e.message ?: "Error"
+            }
         }
     }
 

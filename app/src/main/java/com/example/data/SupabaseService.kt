@@ -221,7 +221,7 @@ object SupabaseService {
         }
     }
 
-    private suspend fun createInitialProfile(id: String, role: String, accessToken: String? = null): Boolean {
+    suspend fun createInitialProfile(id: String, role: String, accessToken: String? = null): Boolean {
         val payload = JSONObject().apply {
             put("id", id)
             put("role", role)
@@ -456,5 +456,42 @@ object SupabaseService {
                 false
             }
         }
+    }
+
+    // ==========================================
+    // 7. USER MONITORING & PROFILE EDITS (ADMIN)
+    // ==========================================
+
+    suspend fun getAllProfiles(): List<SupabaseProfile> {
+        val responseBody = makeGetRequest("/rest/v1/profiles?order=id.asc")
+        if (responseBody == null) return emptyList()
+        return try {
+            val list = mutableListOf<SupabaseProfile>()
+            val arr = JSONArray(responseBody)
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(
+                    SupabaseProfile(
+                        id = obj.getString("id"),
+                        role = obj.optString("role", "user"),
+                        isVip = obj.optBoolean("is_vip", false),
+                        vipExpiry = if (obj.isNull("vip_expiry")) null else obj.getString("vip_expiry")
+                    )
+                )
+            }
+            list
+        } catch (e: Exception) {
+            Log.e(TAG, "Parse all profiles error: ${e.message}", e)
+            emptyList()
+        }
+    }
+
+    suspend fun updateProfile(userId: String, role: String, isVip: Boolean, vipExpiryISO: String?): Boolean {
+        val payload = JSONObject().apply {
+            put("role", role)
+            put("is_vip", isVip)
+            put("vip_expiry", vipExpiryISO)
+        }.toString()
+        return makePatchRequest("/rest/v1/profiles?id=eq.$userId", payload)
     }
 }

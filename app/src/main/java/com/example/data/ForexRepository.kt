@@ -83,7 +83,7 @@ class ForexRepository(private val forexDao: ForexDao) {
         withContext(Dispatchers.IO) {
             // Check if database already has signals
             val current = allSignals.firstOrNull() ?: emptyList()
-            if (current.isEmpty()) {
+            if (false) {
                 // Populate default Free and VIP signals
                 val initial = listOf(
                     SignalEntity(

@@ -3012,6 +3012,7 @@ fun AdminPanelScreen(viewModel: ForexViewModel) {
     val couponExpiryBuilder by viewModel.couponExpiryBuilder.collectAsState()
     val packages by viewModel.supabasePackages.collectAsState()
     val coupons by viewModel.supabaseCoupons.collectAsState()
+    val profiles by viewModel.adminProfiles.collectAsState()
 
     val packagePrices = remember { mutableStateMapOf<String, String>() }
     packages.forEach { pkg ->
@@ -3056,6 +3057,7 @@ fun AdminPanelScreen(viewModel: ForexViewModel) {
             ) {
                 val tabs = listOf(
                     Triple("SIGNALS", if (lang == "fa") "سیگنال‌ها" else "Signals", Icons.Default.TrendingUp),
+                    Triple("MONITORING", if (lang == "fa") "کاربران" else "Users", Icons.Default.People),
                     Triple("WALLET", if (lang == "fa") "آدرس ولت" else "TRON Wallet", Icons.Default.AccountBalanceWallet),
                     Triple("PACKAGES", if (lang == "fa") "پکیج‌ها" else "Packages", Icons.Default.CardMembership),
                     Triple("COUPONS", if (lang == "fa") "تخفیف‌ها" else "Coupons", Icons.Default.LocalOffer)
@@ -3105,6 +3107,171 @@ fun AdminPanelScreen(viewModel: ForexViewModel) {
         }
 
         when (adminTab) {
+            "MONITORING" -> {
+                // User Monitoring & VIP Management Panel
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                    ) {
+                        Text(
+                            text = if (lang == "fa") "مانیتورینگ و مدیریت کاربران" else "User Monitoring & Management",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+
+                        if (profiles.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(CyberSurface, RoundedCornerShape(12.dp))
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (lang == "fa") "هیچ کاربری یافت نشد یا در حال لود..." else "No users found or loading...",
+                                    color = CyberTextMuted,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        } else {
+                            profiles.forEach { profile ->
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 12.dp)
+                                        .border(1.dp, CyberBorder, RoundedCornerShape(12.dp)),
+                                    colors = CardDefaults.cardColors(containerColor = CyberSurface),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(14.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column {
+                                                Text(
+                                                    text = "ID: ${profile.id}",
+                                                    color = Color.White,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontFamily = FontFamily.Monospace
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Row(
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    // Role Tag
+                                                    val isAdmin = profile.role.lowercase() == "admin"
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .background(if (isAdmin) CyberPrimary.copy(alpha = 0.15f) else CyberSurfaceVariant, RoundedCornerShape(4.dp))
+                                                            .border(0.8.dp, if (isAdmin) CyberPrimary else CyberBorder, RoundedCornerShape(4.dp))
+                                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = profile.role.uppercase(),
+                                                            color = if (isAdmin) CyberPrimary else CyberTextSecondary,
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                    }
+
+                                                    // VIP Tag
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .background(if (profile.isVip) CyberGold.copy(alpha = 0.15f) else CyberSurfaceVariant, RoundedCornerShape(4.dp))
+                                                            .border(0.8.dp, if (profile.isVip) CyberGold else CyberBorder, RoundedCornerShape(4.dp))
+                                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = if (profile.isVip) "VIP" else "REGULAR",
+                                                            color = if (profile.isVip) CyberGold else CyberTextMuted,
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                            // Expiry Display
+                                            if (profile.isVip && profile.vipExpiry != null) {
+                                                Text(
+                                                    text = profile.vipExpiry.take(10),
+                                                    color = CyberGold,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontFamily = FontFamily.Monospace
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(14.dp))
+
+                                        // Action buttons to toggle role or VIP status
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            // Toggle Role Button
+                                            val isAdmin = profile.role.lowercase() == "admin"
+                                            Button(
+                                                onClick = {
+                                                    val newRole = if (isAdmin) "user" else "admin"
+                                                    viewModel.adminUpdateUserProfile(profile.id, newRole, profile.isVip, null)
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = CyberSurfaceVariant),
+                                                border = BorderStroke(1.dp, CyberBorder),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.weight(1f).height(36.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (lang == "fa") {
+                                                        if (isAdmin) "تغییر به کاربر عادی" else "ارتقا به ادمین"
+                                                    } else {
+                                                        if (isAdmin) "Make User" else "Make Admin"
+                                                    },
+                                                    color = CyberTextPrimary,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+
+                                            // Toggle VIP Button
+                                            Button(
+                                                onClick = {
+                                                    viewModel.adminUpdateUserProfile(profile.id, profile.role, !profile.isVip, if (!profile.isVip) 30 else null)
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = if (profile.isVip) CyberRed.copy(alpha = 0.2f) else CyberGold.copy(alpha = 0.2f)),
+                                                border = BorderStroke(1.dp, if (profile.isVip) CyberRed else CyberGold),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.weight(1f).height(36.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (lang == "fa") {
+                                                        if (profile.isVip) "لغو اشتراک VIP" else "فعالسازی ۳۰ روز VIP"
+                                                    } else {
+                                                        if (profile.isVip) "Revoke VIP" else "Grant 30D VIP"
+                                                    },
+                                                    color = if (profile.isVip) CyberRed else CyberGold,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             "SIGNALS" -> {
                 // Signal Creation / Editing Mode Form
                 item {
