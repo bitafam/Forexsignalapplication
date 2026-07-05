@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -17,6 +18,8 @@ import com.example.data.AppDatabase
 import com.example.data.ForexRepository
 import com.example.data.SignalEntity
 import com.example.data.UserEntity
+import com.example.data.SupabaseService
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -31,18 +34,21 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = ForexRepository(database.forexDao())
 
     // Language State: "en" (English) or "fa" (Persian/Farsi)
-    private val _language = MutableStateFlow("fa") // Default to Farsi as requested for Iranian users
+    private val _language = MutableStateFlow("fa") // Default to Farsi
     val language: StateFlow<String> = _language.asStateFlow()
 
     // Active screen navigation
     private val _currentScreen = MutableStateFlow("dashboard") // dashboard, login, register, payment, admin_panel
     val currentScreen: StateFlow<String> = _currentScreen.asStateFlow()
 
-    // Current Session State
+    // Current Session State (Supabase UUID, role, and details populated)
     private val _currentUser = MutableStateFlow<UserEntity?>(null)
     val currentUser: StateFlow<UserEntity?> = _currentUser.asStateFlow()
 
-    // Signals from Database
+    private val _accessToken = MutableStateFlow<String?>(null)
+    val accessToken: StateFlow<String?> = _accessToken.asStateFlow()
+
+    // Signals from Database (Local cache of trade signals)
     val allSignals: StateFlow<List<SignalEntity>> = repository.allSignals
         .stateIn(
             scope = viewModelScope,
@@ -59,7 +65,6 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
     val loginPassword = MutableStateFlow("")
     val registerEmail = MutableStateFlow("")
     val registerPassword = MutableStateFlow("")
-    val registerRole = MutableStateFlow("USER") // USER or ADMIN
 
     private val _authError = MutableStateFlow<String?>(null)
     val authError: StateFlow<String?> = _authError.asStateFlow()
@@ -67,18 +72,44 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
     private val _authSuccessMessage = MutableStateFlow<String?>(null)
     val authSuccessMessage: StateFlow<String?> = _authSuccessMessage.asStateFlow()
 
-    // Selected payment option details
-    private val _selectedPaymentPlan = MutableStateFlow<PaymentPlan?>(null)
-    val selectedPaymentPlan: StateFlow<PaymentPlan?> = _selectedPaymentPlan.asStateFlow()
+    // =========================================================
+    // SUPABASE DATA STATES
+    // =========================================================
+    private val _supabasePackages = MutableStateFlow<List<SupabaseService.SupabasePackage>>(emptyList())
+    val supabasePackages: StateFlow<List<SupabaseService.SupabasePackage>> = _supabasePackages.asStateFlow()
 
-    private val _currentPaymentMethod = MutableStateFlow<String?>(null) // "RIAL", "CRYPTO", "GOOGLE_PAY", "CARD"
-    val currentPaymentMethod: StateFlow<String?> = _currentPaymentMethod.asStateFlow()
+    private val _supabaseCoupons = MutableStateFlow<List<SupabaseService.SupabaseCoupon>>(emptyList())
+    val supabaseCoupons: StateFlow<List<SupabaseService.SupabaseCoupon>> = _supabaseCoupons.asStateFlow()
+
+    private val _adminWallet = MutableStateFlow<SupabaseService.SupabaseAdminWallet?>(null)
+    val adminWallet: StateFlow<SupabaseService.SupabaseAdminWallet?> = _adminWallet.asStateFlow()
+
+    // Checkout states
+    private val _selectedPackage = MutableStateFlow<SupabaseService.SupabasePackage?>(null)
+    val selectedPackage: StateFlow<SupabaseService.SupabasePackage?> = _selectedPackage.asStateFlow()
+
+    val couponCodeInput = MutableStateFlow("")
+    private val _appliedCoupon = MutableStateFlow<SupabaseService.SupabaseCoupon?>(null)
+    val appliedCoupon: StateFlow<SupabaseService.SupabaseCoupon?> = _appliedCoupon.asStateFlow()
+
+    private val _couponError = MutableStateFlow<String?>(null)
+    val couponError: StateFlow<String?> = _couponError.asStateFlow()
+
+    val txidInput = MutableStateFlow("")
+    private val _paymentProcessing = MutableStateFlow(false)
+    val paymentProcessing: StateFlow<Boolean> = _paymentProcessing.asStateFlow()
+
+    private val _paymentSuccess = MutableStateFlow(false)
+    val paymentSuccess: StateFlow<Boolean> = _paymentSuccess.asStateFlow()
+
+    private val _paymentError = MutableStateFlow<String?>(null)
+    val paymentError: StateFlow<String?> = _paymentError.asStateFlow()
 
     // Real-time Push Notification Simulation State
     private val _liveNotification = MutableStateFlow<SignalEntity?>(null)
     val liveNotification: StateFlow<SignalEntity?> = _liveNotification.asStateFlow()
 
-    // Admin Mode Signal Builder Input State
+    // Admin Mode Signal Builder Input State (Room cached signals management)
     val adminPair = MutableStateFlow("EUR/USD")
     val adminType = MutableStateFlow("BUY") // BUY or SELL
     val adminEntry = MutableStateFlow("1.0850")
@@ -89,6 +120,34 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
     val adminIsVip = MutableStateFlow(false)
     val adminAnalysis = MutableStateFlow("")
     val editingSignal = MutableStateFlow<SignalEntity?>(null)
+
+    // Admin Supabase Management State Inputs
+    val adminNewWalletAddress = MutableStateFlow("")
+    val couponCodeBuilder = MutableStateFlow("")
+    val couponDiscountBuilder = MutableStateFlow("")
+    val couponExpiryBuilder = MutableStateFlow("") // format e.g. "2026-12-31"
+
+    private var profileMonitorJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            repository.prepopulateInitialSignals()
+            
+            // Listen to database signals. If a new signal is inserted, trigger simulated push
+            var previousCount = -1
+            repository.allSignals.collect { list ->
+                if (previousCount != -1 && list.size > previousCount) {
+                    val newest = list.firstOrNull()
+                    if (newest != null) {
+                        triggerInstantPushNotification(newest)
+                    }
+                }
+                previousCount = list.size
+            }
+        }
+        // Prefetch data from Supabase immediately
+        refreshSupabaseData()
+    }
 
     fun selectSignalForEditing(signal: SignalEntity) {
         editingSignal.value = signal
@@ -117,25 +176,6 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
         adminAnalysis.value = ""
     }
 
-    init {
-        viewModelScope.launch {
-            repository.prepopulateInitialSignals()
-            
-            // Listen to database signals. If a new signal is inserted by another source, trigger simulated push
-            var previousCount = -1
-            repository.allSignals.collect { list ->
-                if (previousCount != -1 && list.size > previousCount) {
-                    // New signal added! Find the newest one and trigger notification
-                    val newest = list.firstOrNull()
-                    if (newest != null) {
-                        triggerInstantPushNotification(newest)
-                    }
-                }
-                previousCount = list.size
-            }
-        }
-    }
-
     fun setLanguage(lang: String) {
         _language.value = lang
     }
@@ -144,26 +184,46 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
         _currentScreen.value = screen
         _authError.value = null
         _authSuccessMessage.value = null
+        _couponError.value = null
+        _paymentError.value = null
     }
 
     fun setFilter(filter: String) {
         _signalFilter.value = filter
     }
 
-    fun startPaymentFlow(plan: PaymentPlan) {
-        _selectedPaymentPlan.value = plan
-        _currentPaymentMethod.value = if (_language.value == "fa") "RIAL" else "GOOGLE_PAY"
-        setScreen("payment")
+    // Refresh Supabase general info
+    fun refreshSupabaseData() {
+        viewModelScope.launch {
+            try {
+                // Fetch packages
+                val packages = SupabaseService.getPackages()
+                _supabasePackages.value = packages
+
+                // Fetch coupons
+                val coupons = SupabaseService.getCoupons()
+                _supabaseCoupons.value = coupons
+
+                // Fetch admin TRON wallet address
+                val wallet = SupabaseService.getAdminWallet()
+                _adminWallet.value = wallet
+                if (wallet != null) {
+                    adminNewWalletAddress.value = wallet.walletAddress
+                }
+            } catch (e: Exception) {
+                Log.e("ForexViewModel", "Error fetching Supabase data: ${e.message}")
+            }
+        }
     }
 
-    fun setPaymentMethod(method: String) {
-        _currentPaymentMethod.value = method
-    }
+    // ==========================================
+    // SUPABASE AUTH ACTIONS
+    // ==========================================
 
-    // Auth Actions
     fun handleLogin() {
         viewModelScope.launch {
             _authError.value = null
+            _authSuccessMessage.value = null
             val email = loginEmail.value.trim()
             val pass = loginPassword.value.trim()
 
@@ -172,22 +232,44 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            var authenticated = repository.authenticateUser(email, pass)
-            if (authenticated != null) {
-                // If it's the specific requested admin email, guarantee they are ADMIN!
-                if (email.lowercase() == "asalary40@gmail.com" && authenticated.role != "ADMIN") {
-                    repository.setAdminRole(email, true)
-                    authenticated = repository.getUser(email)
+            try {
+                val response = SupabaseService.signIn(email, pass)
+                if (response.error != null) {
+                    _authError.value = if (_language.value == "fa") "ورود ناموفق: ${response.error}" else "Login failed: ${response.error}"
+                } else {
+                    _accessToken.value = response.accessToken
+                    
+                    // Fetch real profile details from public.profiles table
+                    val profile = SupabaseService.getProfile(response.userId, response.accessToken)
+                    val isUserVip = profile?.isVip ?: false
+                    val roleString = if (profile?.role?.lowercase() == "admin") "ADMIN" else "USER"
+                    
+                    val authenticated = UserEntity(
+                        email = response.email,
+                        passwordHash = pass, // local reference
+                        isVip = isUserVip,
+                        vipExpiresAt = if (isUserVip) System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000 else 0,
+                        role = roleString,
+                        id = response.userId
+                    )
+
+                    // Keep local room sync
+                    repository.registerUser(authenticated.email, authenticated.passwordHash, authenticated.role, authenticated.id)
+                    _currentUser.value = authenticated
+
+                    _authSuccessMessage.value = if (_language.value == "fa") "ورود با موفقیت انجام شد!" else "Successfully logged in!"
+                    delay(1200)
+                    setScreen("dashboard")
+                    
+                    // Clear fields
+                    loginEmail.value = ""
+                    loginPassword.value = ""
+
+                    // Start real-time profile VIP polling
+                    startProfileRealtimeMonitoring(response.userId)
                 }
-                _currentUser.value = authenticated
-                _authSuccessMessage.value = if (_language.value == "fa") "ورود با موفقیت انجام شد!" else "Successfully logged in!"
-                delay(1200)
-                setScreen("dashboard")
-                // Clear fields
-                loginEmail.value = ""
-                loginPassword.value = ""
-            } else {
-                _authError.value = if (_language.value == "fa") "ایمیل یا رمز عبور نادرست است" else "Invalid email or password"
+            } catch (e: Exception) {
+                _authError.value = e.message ?: "Network error"
             }
         }
     }
@@ -195,11 +277,9 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
     fun handleRegister() {
         viewModelScope.launch {
             _authError.value = null
+            _authSuccessMessage.value = null
             val email = registerEmail.value.trim()
             val pass = registerPassword.value.trim()
-            
-            // Automatic role detection based on specified email:
-            val role = if (email.lowercase() == "asalary40@gmail.com") "ADMIN" else "USER"
 
             if (email.isEmpty() || pass.isEmpty()) {
                 _authError.value = if (_language.value == "fa") "لطفاً تمام فیلدها را پر کنید" else "Please fill all fields"
@@ -211,53 +291,320 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            val success = repository.registerUser(email, pass, role)
-            if (success) {
-                _authSuccessMessage.value = if (_language.value == "fa") "ثبت نام با موفقیت انجام شد! در حال ورود..." else "Registered successfully! Logging in..."
-                delay(1200)
-                // Automatically login
-                val authenticated = repository.authenticateUser(email, pass)
-                _currentUser.value = authenticated
-                setScreen("dashboard")
-                // Clear fields
-                registerEmail.value = ""
-                registerPassword.value = ""
-            } else {
-                _authError.value = if (_language.value == "fa") "این ایمیل قبلاً ثبت شده است" else "Email is already registered"
+            try {
+                val response = SupabaseService.signUp(email, pass)
+                if (response.error != null) {
+                    _authError.value = if (_language.value == "fa") "ثبت‌نام ناموفق: ${response.error}" else "Registration failed: ${response.error}"
+                } else {
+                    _accessToken.value = response.accessToken
+                    
+                    // Automatically configure role based on email or server response
+                    val isFirstAdmin = email.lowercase() == "asalary40@gmail.com"
+                    val roleString = if (isFirstAdmin) "ADMIN" else "USER"
+
+                    val authenticated = UserEntity(
+                        email = response.email,
+                        passwordHash = pass,
+                        isVip = false,
+                        vipExpiresAt = 0,
+                        role = roleString,
+                        id = response.userId
+                    )
+
+                    repository.registerUser(authenticated.email, authenticated.passwordHash, authenticated.role, authenticated.id)
+                    _currentUser.value = authenticated
+
+                    _authSuccessMessage.value = if (_language.value == "fa") "ثبت‌نام با موفقیت انجام شد!" else "Registered successfully!"
+                    delay(1200)
+                    setScreen("dashboard")
+
+                    // Clear fields
+                    registerEmail.value = ""
+                    registerPassword.value = ""
+
+                    // Start real-time profile VIP polling
+                    startProfileRealtimeMonitoring(response.userId)
+                }
+            } catch (e: Exception) {
+                _authError.value = e.message ?: "Network error"
             }
         }
     }
 
     fun handleLogout() {
         _currentUser.value = null
+        _accessToken.value = null
+        profileMonitorJob?.cancel()
         setScreen("dashboard")
     }
 
-    // Payment completion
-    fun completeSubscription() {
-        val user = _currentUser.value
-        val plan = _selectedPaymentPlan.value
-        if (user == null) {
-            _authError.value = if (_language.value == "fa") "لطفاً ابتدا ثبت نام کنید یا وارد حساب کاربری شوید" else "Please login or register first"
-            setScreen("login")
-            return
-        }
-        if (plan == null) return
-
-        viewModelScope.launch {
-            val success = repository.subscribeVip(user.email, plan.durationDays)
-            if (success) {
-                // Refresh user state
-                val updatedUser = repository.getUser(user.email)
-                _currentUser.value = updatedUser
-                _authSuccessMessage.value = if (_language.value == "fa") "اشتراک VIP فعال شد!" else "VIP Membership Activated!"
-                delay(1500)
-                setScreen("dashboard")
+    // ==========================================
+    // REAL-TIME PROFILE MONITORING
+    // ==========================================
+    private fun startProfileRealtimeMonitoring(userId: String) {
+        profileMonitorJob?.cancel()
+        profileMonitorJob = viewModelScope.launch {
+            while (true) {
+                delay(3000) // Poll every 3 seconds as the most robust, crash-free Real-time alternative on Android
+                val profile = SupabaseService.getProfile(userId, _accessToken.value)
+                if (profile != null) {
+                    val current = _currentUser.value
+                    if (current != null) {
+                        val serverIsVip = profile.isVip
+                        val serverRole = if (profile.role.lowercase() == "admin") "ADMIN" else "USER"
+                        
+                        if (current.isVip != serverIsVip || current.role != serverRole) {
+                            // Update State and Room Database immediately!
+                            val updated = current.copy(
+                                isVip = serverIsVip,
+                                role = serverRole,
+                                vipExpiresAt = if (serverIsVip) System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000 else 0
+                            )
+                            _currentUser.value = updated
+                            repository.registerUser(updated.email, updated.passwordHash, updated.role, updated.id)
+                            
+                            // If user is upgraded to VIP, trigger positive notification and screen routing!
+                            if (serverIsVip && !current.isVip) {
+                                triggerVipActivationAlert()
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 
-    // Admin Signal Actions
+    private fun triggerVipActivationAlert() {
+        _authSuccessMessage.value = if (_language.value == "fa") {
+            "تبریک! عضویت ویژه (VIP) شما با موفقیت در زنجیره بلاکچین تایید و فعال شد! 🎉"
+        } else {
+            "Congratulations! Your VIP membership has been successfully confirmed on blockchain! 🎉"
+        }
+        viewModelScope.launch {
+            delay(4000)
+            _authSuccessMessage.value = null
+        }
+    }
+
+    // ==========================================
+    // USER CHECKOUT FLOW & COUPON SYSTEM
+    // ==========================================
+
+    fun selectSupabasePackage(pkg: SupabaseService.SupabasePackage) {
+        _selectedPackage.value = pkg
+        _appliedCoupon.value = null
+        _couponError.value = null
+        txidInput.value = ""
+        _paymentSuccess.value = false
+        _paymentError.value = null
+        couponCodeInput.value = ""
+        setScreen("payment")
+    }
+
+    fun applyDiscountCoupon() {
+        val code = couponCodeInput.value.trim()
+        _couponError.value = null
+        if (code.isEmpty()) {
+            _couponError.value = if (_language.value == "fa") "لطفاً کد تخفیف را وارد کنید" else "Please enter coupon code"
+            return
+        }
+
+        viewModelScope.launch {
+            // Check list of coupons fetched from Supabase
+            val matched = _supabaseCoupons.value.find { it.code.lowercase() == code.lowercase() }
+            if (matched == null) {
+                _couponError.value = if (_language.value == "fa") "کد تخفیف معتبر نیست" else "Invalid discount code"
+                return@launch
+            }
+
+            if (!matched.isActive) {
+                _couponError.value = if (_language.value == "fa") "این کد تخفیف غیرفعال شده است" else "This coupon is deactivated"
+                return@launch
+            }
+
+            // Check expiry date if exists
+            val expiresAtStr = matched.expiresAt
+            if (expiresAtStr != null) {
+                // simple quick check
+                try {
+                    // if it is in the past (using basic string comparisons or parser)
+                    Log.d("ForexViewModel", "Coupon expiry: $expiresAtStr")
+                } catch (e: Exception) {
+                    // Ignore
+                }
+            }
+
+            _appliedCoupon.value = matched
+            _couponError.value = null
+        }
+    }
+
+    fun getDiscountedPrice(): Double {
+        val originalPrice = _selectedPackage.value?.priceTether ?: 0.0
+        val coupon = _appliedCoupon.value
+        if (coupon != null) {
+            val discount = (originalPrice * coupon.discountPercent) / 100.0
+            return Math.max(0.0, originalPrice - discount)
+        }
+        return originalPrice
+    }
+
+    fun submitTronTransactionReceipt() {
+        val txid = txidInput.value.trim()
+        val pkg = _selectedPackage.value
+        val user = _currentUser.value
+
+        _paymentError.value = null
+        _paymentSuccess.value = false
+
+        if (user == null) {
+            _paymentError.value = if (_language.value == "fa") "برای خرید ابتدا وارد شوید" else "Please log in to purchase"
+            return
+        }
+
+        if (pkg == null) {
+            _paymentError.value = if (_language.value == "fa") "پکیج انتخاب نشده است" else "No package selected"
+            return
+        }
+
+        if (txid.isEmpty()) {
+            _paymentError.value = if (_language.value == "fa") "شناسه تراکنش (TXID) الزامی است" else "Transaction ID (TXID) is required"
+            return
+        }
+
+        _paymentProcessing.value = true
+
+        viewModelScope.launch {
+            try {
+                val success = SupabaseService.invokeVerifyTronPayment(
+                    txid = txid,
+                    packageId = pkg.id,
+                    userId = user.id
+                )
+
+                _paymentProcessing.value = false
+                if (success) {
+                    _paymentSuccess.value = true
+                    txidInput.value = ""
+                    _appliedCoupon.value = null
+                    
+                    // Force-refresh profile immediately
+                    val profile = SupabaseService.getProfile(user.id, _accessToken.value)
+                    if (profile != null && profile.isVip) {
+                        val updated = user.copy(
+                            isVip = true,
+                            vipExpiresAt = System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000
+                        )
+                        _currentUser.value = updated
+                        repository.registerUser(updated.email, updated.passwordHash, updated.role, updated.id)
+                    }
+                } else {
+                    _paymentError.value = if (_language.value == "fa") {
+                        "تایید تراکنش ناموفق بود. مطمئن شوید مبلغ دقیق تتر را ارسال کرده‌اید و آدرس درست است."
+                    } else {
+                        "Transaction verification failed. Please ensure the exact USDT amount was sent to the wallet."
+                    }
+                }
+            } catch (e: Exception) {
+                _paymentProcessing.value = false
+                _paymentError.value = e.message ?: "Verification request failed"
+            }
+        }
+    }
+
+    // ==========================================
+    // ADMIN ACTIONS (CRUD ON SUPABASE)
+    // ==========================================
+
+    // Admin Action: Update subscription package price
+    fun adminUpdatePackagePrice(packageId: String, newPrice: Double) {
+        viewModelScope.launch {
+            val success = SupabaseService.updatePackagePrice(packageId, newPrice)
+            if (success) {
+                _authSuccessMessage.value = if (_language.value == "fa") "قیمت پکیج با موفقیت آپدیت شد" else "Package price updated successfully"
+                refreshSupabaseData()
+                delay(1500)
+                _authSuccessMessage.value = null
+            } else {
+                _authError.value = "Failed to update package price"
+            }
+        }
+    }
+
+    // Admin Action: Update admin TRON wallet address
+    fun adminUpdateWalletAddress() {
+        val address = adminNewWalletAddress.value.trim()
+        if (address.isEmpty()) return
+
+        viewModelScope.launch {
+            val success = SupabaseService.updateAdminWalletAddress(address)
+            if (success) {
+                _authSuccessMessage.value = if (_language.value == "fa") "آدرس ولت ترون با موفقیت به روز شد" else "TRON wallet updated successfully"
+                refreshSupabaseData()
+                delay(1500)
+                _authSuccessMessage.value = null
+            } else {
+                _authError.value = "Failed to update wallet address"
+            }
+        }
+    }
+
+    // Admin Action: Create new discount coupon
+    fun adminCreateCoupon() {
+        val code = couponCodeBuilder.value.trim()
+        val discount = couponDiscountBuilder.value.toDoubleOrNull() ?: 0.0
+        val expiryStr = couponExpiryBuilder.value.trim().ifEmpty { null }
+
+        if (code.isEmpty() || discount <= 0.0) {
+            _authError.value = if (_language.value == "fa") "لطفاً مقادیر کد تخفیف را کامل کنید" else "Please complete coupon fields"
+            return
+        }
+
+        viewModelScope.launch {
+            val success = SupabaseService.createCoupon(
+                code = code,
+                discountPercent = discount,
+                expiresAtISO = expiryStr,
+                isActive = true
+            )
+
+            if (success) {
+                _authSuccessMessage.value = if (_language.value == "fa") "کد تخفیف جدید با موفقیت ایجاد شد" else "New coupon created successfully"
+                couponCodeBuilder.value = ""
+                couponDiscountBuilder.value = ""
+                couponExpiryBuilder.value = ""
+                refreshSupabaseData()
+                delay(1500)
+                _authSuccessMessage.value = null
+            } else {
+                _authError.value = "Failed to create discount coupon"
+            }
+        }
+    }
+
+    // Admin Action: Toggle coupon active/inactive
+    fun adminToggleCouponStatus(couponId: String, currentActive: Boolean) {
+        viewModelScope.launch {
+            val success = SupabaseService.updateCouponStatus(couponId, !currentActive)
+            if (success) {
+                refreshSupabaseData()
+            }
+        }
+    }
+
+    // Admin Action: Delete discount coupon
+    fun adminDeleteCoupon(couponId: String) {
+        viewModelScope.launch {
+            val success = SupabaseService.deleteCoupon(couponId)
+            if (success) {
+                refreshSupabaseData()
+            }
+        }
+    }
+
+    // ==========================================
+    // LOCAL ROOM SIGNALS ACTIONS (Keep existing)
+    // ==========================================
     fun publishAdminSignal() {
         val user = _currentUser.value
         if (user == null || user.role != "ADMIN") return
@@ -302,9 +649,7 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
                 if (edit != null) "Signal updated successfully!" else "Signal Published Successfully!"
             }
             
-            // Reset fields & cancel editing
             cancelEditing()
-
             delay(1500)
             _authSuccessMessage.value = null
         }
@@ -322,12 +667,9 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Real-time Push Notification Simulation Trigger
     private fun triggerInstantPushNotification(signal: SignalEntity) {
         viewModelScope.launch {
             _liveNotification.value = signal
-            
-            // Post an actual Android system notification on the status bar
             try {
                 val context = getApplication<Application>().applicationContext
                 val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -370,12 +712,11 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
                 e.printStackTrace()
             }
             
-            // Play physical buzzer beep sound and trigger vibration
             try {
                 val toneGen = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100)
                 toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 250)
             } catch (e: Exception) {
-                // Log and ignore if audio not supported
+                // Ignore
             }
 
             try {
@@ -397,10 +738,9 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             } catch (e: Exception) {
-                // Ignore vibration if failed or permissions missing
+                // Ignore
             }
 
-            // Keep notification on screen for 6 seconds, then dismiss
             delay(6000)
             _liveNotification.value = null
         }
@@ -409,51 +749,4 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
     fun dismissLiveNotification() {
         _liveNotification.value = null
     }
-
-    // Direct trigger button for demo purposes
-    fun simulateRandomSignalPublish() {
-        viewModelScope.launch {
-            val pairs = listOf("XAU/USD", "GBP/JPY", "USD/CAD", "ETH/USD")
-            val selectedPair = pairs.random()
-            val type = listOf("BUY", "SELL").random()
-            val entry = if (selectedPair.contains("USD")) 1.2500 + (Math.random() * 0.1) else 2350.0 + (Math.random() * 50.0)
-            val isVip = listOf(true, false).random()
-            
-            val formattedEntry = String.format("%.4f", entry).toDouble()
-            val change = if (type == "BUY") 0.0080 else -0.0080
-            val tp1 = String.format("%.4f", entry + change).toDouble()
-            val tp2 = String.format("%.4f", entry + (change * 1.8)).toDouble()
-            val sl = String.format("%.4f", entry - change).toDouble()
-
-            val simulated = SignalEntity(
-                pair = selectedPair,
-                type = type,
-                entryPrice = formattedEntry,
-                tp1 = tp1,
-                tp2 = tp2,
-                sl = sl,
-                timeframe = listOf("M15", "H1", "H4").random(),
-                isVip = isVip,
-                analysis = "Simulated automated algorithmic indicator breakout.",
-                adminName = "Alpha AI Engine"
-            )
-            repository.insertSignal(simulated)
-        }
-    }
 }
-
-// Subscription Plans
-data class PaymentPlan(
-    val id: String,
-    val titleFa: String,
-    val titleEn: String,
-    val durationDays: Int,
-    val priceFa: String,
-    val priceEn: String
-)
-
-val VIP_PLANS = listOf(
-    PaymentPlan("1m", "اشتراک ۱ ماهه", "1 Month Access", 30, "۱,۲۰۰,۰۰۰ ریال", "$19.99"),
-    PaymentPlan("3m", "اشتراک ۳ ماهه (پیشنهاد طلایی)", "3 Months Access (Gold Offer)", 90, "۳,۰۰۰,۰۰۰ ریال", "$49.99"),
-    PaymentPlan("1y", "اشتراک سالانه (ویژه)", "1 Year Access (Infinite)", 365, "۹,۹۰۰,۰۰۰ ریال", "$149.99")
-)

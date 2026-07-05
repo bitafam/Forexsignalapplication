@@ -34,13 +34,15 @@ class ForexRepository(private val forexDao: ForexDao) {
         }
     }
 
-    suspend fun registerUser(email: String, passwordHash: String, role: String = "USER"): Boolean {
+    suspend fun registerUser(email: String, passwordHash: String, role: String = "USER", id: String = ""): Boolean {
         return withContext(Dispatchers.IO) {
             val existing = forexDao.getUser(email)
             if (existing != null) {
-                false // Already registered
+                // Update existing user with new ID and role
+                forexDao.insertUser(UserEntity(email, passwordHash, isVip = existing.isVip, vipExpiresAt = existing.vipExpiresAt, role = role, id = id))
+                true
             } else {
-                forexDao.insertUser(UserEntity(email, passwordHash, isVip = false, vipExpiresAt = 0, role = role))
+                forexDao.insertUser(UserEntity(email, passwordHash, isVip = false, vipExpiresAt = 0, role = role, id = id))
                 true
             }
         }

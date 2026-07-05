@@ -9,5 +9,6 @@ data class UserEntity(
     val passwordHash: String,
     val isVip: Boolean = false,
     val vipExpiresAt: Long = 0,
-    val role: String = "USER" // "USER" or "ADMIN"
+    val role: String = "USER", // "USER" or "ADMIN"
+    val id: String = "" // Supabase UUID
 )

@@ -50,9 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.SignalEntity
 import com.example.data.UserEntity
-import com.example.ui.PaymentPlan
 import com.example.ui.ForexViewModel
-import com.example.ui.VIP_PLANS
 import com.example.ui.theme.*
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -138,8 +136,14 @@ class MainActivity : ComponentActivity() {
                                         .clip(RoundedCornerShape(16.dp))
                                         .background(if (billingActive) CyberPrimary.copy(alpha = 0.12f) else Color.Transparent)
                                         .clickable {
-                                            if (viewModel.selectedPaymentPlan.value == null) {
-                                                viewModel.startPaymentFlow(VIP_PLANS[0])
+                                            val currentPkg = viewModel.selectedPackage.value
+                                            if (currentPkg == null) {
+                                                val pkgs = viewModel.supabasePackages.value
+                                                if (pkgs.isNotEmpty()) {
+                                                    viewModel.selectSupabasePackage(pkgs.first())
+                                                } else {
+                                                    viewModel.setScreen("dashboard")
+                                                }
                                             } else {
                                                 viewModel.setScreen("payment")
                                             }
@@ -381,272 +385,77 @@ fun DashboardScreen(viewModel: ForexViewModel) {
             .fillMaxSize()
             .background(Color.Transparent)
     ) {
-        // Futuristic Glowing Header Banner
+        // Clean Minimal Premium Header (Satisfies layout redesign request)
         item {
-            Box(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(CyberSurface, CyberObsidian.copy(alpha = 0.95f))
-                        )
-                    )
-                    .border(
-                        border = BorderStroke(1.5.dp, Brush.linearGradient(
-                            colors = listOf(CyberPrimary.copy(alpha = 0.5f), CyberSecondary.copy(alpha = 0.1f), CyberTertiary.copy(alpha = 0.4f))
-                        )),
-                        shape = RoundedCornerShape(24.dp)
-                    )
-                    .padding(16.dp)
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Background subtle Canvas grid
-                Canvas(modifier = Modifier.matchParentSize()) {
-                    val pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4f, 8f), 0f)
-                    val cols = 8
-                    val rows = 5
-                    val colWidth = size.width / cols
-                    val rowHeight = size.height / rows
-                    for (i in 1 until cols) {
-                        drawLine(
-                            color = CyberPrimary.copy(alpha = 0.05f),
-                            start = Offset(colWidth * i, 0f),
-                            end = Offset(colWidth * i, size.height),
-                            pathEffect = pathEffect
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(CyberPrimary.copy(alpha = 0.1f), RoundedCornerShape(10.dp))
+                            .border(1.dp, CyberPrimary, RoundedCornerShape(10.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.TrendingUp,
+                            contentDescription = null,
+                            tint = CyberPrimary,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
-                    for (i in 1 until rows) {
-                        drawLine(
-                            color = CyberPrimary.copy(alpha = 0.05f),
-                            start = Offset(0f, rowHeight * i),
-                            end = Offset(size.width, rowHeight * i),
-                            pathEffect = pathEffect
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (lang == "fa") "اف‌ایکس‌ویژن" else "FxVision",
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "PRO",
+                                color = CyberPrimary,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Black,
+                                modifier = Modifier
+                                    .background(CyberPrimary.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
+                        Text(
+                            text = if (lang == "fa") "سامانه پیشرفته معاملاتی" else "TRADING INTELLIGENCE SYSTEM",
+                            color = CyberTextSecondary,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
                         )
                     }
                 }
 
-                Column {
-                    // Header Bar with Branding & Actions
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .background(
-                                        brush = Brush.radialGradient(
-                                            colors = listOf(CyberPrimary, CyberSecondary.copy(alpha = 0.4f))
-                                        ),
-                                        shape = RoundedCornerShape(10.dp)
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.TrendingUp,
-                                    contentDescription = null,
-                                    tint = CyberObsidian,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = if (lang == "fa") "اف‌ایکس‌ویژن " else "FxVision ",
-                                        color = Color.White,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Black
-                                    )
-                                    Text(
-                                        text = "PRO",
-                                        color = CyberPrimary,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Black,
-                                        modifier = Modifier
-                                            .background(CyberPrimary.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
-                                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                                    )
-                                }
-                                Text(
-                                    text = if (lang == "fa") "شبکه پیشرفته سیگنال دهی" else "ALGORITHMIC INTELLIGENCE",
-                                    color = CyberTextSecondary,
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.sp
-                                )
-                            }
-                        }
-
-                        // Top Controls Row
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // Language switcher
-                            Button(
-                                onClick = { viewModel.setLanguage(if (lang == "fa") "en" else "fa") },
-                                colors = ButtonDefaults.buttonColors(containerColor = CyberSurfaceVariant),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                modifier = Modifier.height(28.dp)
-                            ) {
-                                Text(
-                                    text = if (lang == "fa") "EN" else "FA",
-                                    fontSize = 10.sp,
-                                    color = CyberPrimary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            // Notification button
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .background(CyberSurfaceVariant, RoundedCornerShape(8.dp))
-                                    .clickable { viewModel.simulateRandomSignalPublish() },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Notifications,
-                                    contentDescription = "Alerts",
-                                    tint = CyberTextPrimary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .background(CyberRed, CircleShape)
-                                        .align(Alignment.TopEnd)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Stunning Dashboard Stats and Interactive Ring Row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1.3f)) {
-                            Text(
-                                text = if (lang == "fa") "موتور بهینه‌ساز فعال" else "ENGINE STATUS:",
-                                color = CyberTextSecondary,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .background(CyberGreen, CircleShape)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = if (lang == "fa") "هوش مصنوعی آنلاین" else "AI NEURAL ENGINE RUNNING",
-                                    color = CyberGreen,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Black
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            
-                            // Row of interactive parameters
-                            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                Column {
-                                    Text(
-                                        text = if (lang == "fa") "دقت ماهیانه" else "WIN RATE",
-                                        color = CyberTextMuted,
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "94.8%",
-                                        color = CyberPrimary,
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.Black,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
-                                Column {
-                                    Text(
-                                        text = if (lang == "fa") "سیگنال کل" else "TOTAL",
-                                        color = CyberTextMuted,
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "3,280",
-                                        color = CyberTextPrimary,
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.Black,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
-                                Column {
-                                    Text(
-                                        text = if (lang == "fa") "سود خالص" else "TOTAL PIPS",
-                                        color = CyberTextMuted,
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "+18,540",
-                                        color = CyberGreen,
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.Black,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
-                            }
-                        }
-
-                        // Circular glowing tech graphic gauge inside the header!
-                        Box(
-                            modifier = Modifier
-                                .size(74.dp)
-                                .weight(0.7f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Canvas(modifier = Modifier.fillMaxSize()) {
-                                // Draw dark gray outer ring
-                                drawCircle(
-                                    color = CyberBorder,
-                                    radius = size.minDimension / 2.2f,
-                                    style = Stroke(width = 6.dp.toPx())
-                                )
-                                // Draw primary color glowing arc (94.8%)
-                                drawArc(
-                                    color = CyberPrimary,
-                                    startAngle = -90f,
-                                    sweepAngle = 341f,
-                                    useCenter = false,
-                                    style = Stroke(width = 6.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round),
-                                    size = size
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "94.8%",
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Black,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                                Text(
-                                    text = if (lang == "fa") "دقت" else "ACCURACY",
-                                    color = CyberPrimary,
-                                    fontSize = 7.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
+                // Compact Language Switcher
+                Button(
+                    onClick = { viewModel.setLanguage(if (lang == "fa") "en" else "fa") },
+                    colors = ButtonDefaults.buttonColors(containerColor = CyberSurface),
+                    border = BorderStroke(1.dp, CyberBorder),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Text(
+                        text = if (lang == "fa") "ENGLISH" else "فارسی",
+                        fontSize = 9.sp,
+                        color = CyberPrimary,
+                        fontWeight = FontWeight.ExtraBold
+                    )
                 }
             }
         }
@@ -742,33 +551,6 @@ fun DashboardScreen(viewModel: ForexViewModel) {
                         }
                     }
                 }
-            }
-        }
-
-        // Interactive Live Notification Testing Button
-        item {
-            Button(
-                onClick = { viewModel.simulateRandomSignalPublish() },
-                colors = ButtonDefaults.buttonColors(containerColor = CyberSecondary.copy(alpha = 0.15f)),
-                border = BorderStroke(1.dp, CyberSecondary),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
-                    .testTag("simulate_notification_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.NotificationsActive,
-                    contentDescription = "Bell",
-                    tint = CyberSecondary,
-                    modifier = Modifier.padding(end = 8.dp)
-                )
-                Text(
-                    text = L10n.get("sim_sig", lang),
-                    color = CyberTextPrimary,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 12.sp
-                )
             }
         }
 
@@ -1092,8 +874,8 @@ fun UserProfileCard(viewModel: ForexViewModel, lang: String, currentUser: UserEn
                 )
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Show VIP plans directly inside the card for dynamic access
-                VIP_PLANS.forEach { plan ->
+                val packages by viewModel.supabasePackages.collectAsState()
+                packages.forEach { pkg ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1101,27 +883,27 @@ fun UserProfileCard(viewModel: ForexViewModel, lang: String, currentUser: UserEn
                             .clip(RoundedCornerShape(14.dp))
                             .background(CyberSurfaceVariant.copy(alpha = 0.4f))
                             .border(1.dp, CyberBorder.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
-                            .clickable { viewModel.startPaymentFlow(plan) }
+                            .clickable { viewModel.selectSupabasePackage(pkg) }
                             .padding(horizontal = 14.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
                             Text(
-                                text = if (lang == "fa") plan.titleFa else plan.titleEn,
+                                text = pkg.name,
                                 color = CyberTextPrimary,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = if (lang == "fa") "${plan.durationDays} روز دسترسی نامحدود" else "${plan.durationDays} Days Unlimited Access",
+                                text = if (lang == "fa") "${pkg.durationDays} روز دسترسی نامحدود" else "${pkg.durationDays} Days Unlimited Access",
                                 color = CyberTextMuted,
                                 fontSize = 10.sp
                             )
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = if (lang == "fa") plan.priceFa else plan.priceEn,
+                                text = "${pkg.priceTether} USDT",
                                 color = CyberGold,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Black,
@@ -1326,7 +1108,14 @@ fun SignalItemCard(signal: SignalEntity, viewModel: ForexViewModel, lang: String
                     )
                     Spacer(modifier = Modifier.height(14.dp))
                     Button(
-                        onClick = { viewModel.startPaymentFlow(VIP_PLANS[0]) },
+                        onClick = {
+                            val pkgs = viewModel.supabasePackages.value
+                            if (pkgs.isNotEmpty()) {
+                                viewModel.selectSupabasePackage(pkgs.first())
+                            } else {
+                                viewModel.setScreen("dashboard")
+                            }
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = CyberGold),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
@@ -1955,7 +1744,6 @@ fun RegisterScreen(viewModel: ForexViewModel) {
     val success by viewModel.authSuccessMessage.collectAsState()
     val email by viewModel.registerEmail.collectAsState()
     val password by viewModel.registerPassword.collectAsState()
-    val role by viewModel.registerRole.collectAsState()
 
     Box(
         modifier = Modifier
@@ -2127,37 +1915,29 @@ fun RegisterScreen(viewModel: ForexViewModel) {
 @Composable
 fun PaymentScreen(viewModel: ForexViewModel) {
     val lang by viewModel.language.collectAsState()
-    val plan = viewModel.selectedPaymentPlan.collectAsState().value
-    val method by viewModel.currentPaymentMethod.collectAsState()
+    val selectedPackage by viewModel.selectedPackage.collectAsState()
+    val adminWallet by viewModel.adminWallet.collectAsState()
+    val appliedCoupon by viewModel.appliedCoupon.collectAsState()
+    val couponError by viewModel.couponError.collectAsState()
+    val paymentProcessing by viewModel.paymentProcessing.collectAsState()
+    val paymentSuccess by viewModel.paymentSuccess.collectAsState()
+    val paymentError by viewModel.paymentError.collectAsState()
+
+    val couponCodeInput by viewModel.couponCodeInput.collectAsState()
+    val txidInput by viewModel.txidInput.collectAsState()
+
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
 
-    // Shetab Banking Inputs state (Simulated shaparak gate)
-    var rialCardNo by remember { mutableStateOf("") }
-    var rialCvv2 by remember { mutableStateOf("") }
-    var rialExpMonth by remember { mutableStateOf("") }
-    var rialExpYear by remember { mutableStateOf("") }
-    var rialOtp by remember { mutableStateOf("") }
-    var otpTimer by remember { mutableStateOf(0) }
-    var isVerifying by remember { mutableStateOf(false) }
-    var paySuccess by remember { mutableStateOf(false) }
-
-    // Global English Inputs
-    var visaCardNo by remember { mutableStateOf("") }
-    var visaExpiry by remember { mutableStateOf("") }
-    var visaCvv by remember { mutableStateOf("") }
-
-    if (plan == null) {
+    if (selectedPackage == null) {
         viewModel.setScreen("dashboard")
         return
     }
 
-    LaunchedEffect(otpTimer) {
-        if (otpTimer > 0) {
-            delay(1000)
-            otpTimer -= 1
-        }
-    }
+    val pkg = selectedPackage!!
+    val originalPrice = pkg.priceTether
+    val finalPrice = viewModel.getDiscountedPrice()
+    val hasDiscount = appliedCoupon != null
 
     LazyColumn(
         modifier = Modifier
@@ -2177,7 +1957,7 @@ fun PaymentScreen(viewModel: ForexViewModel) {
                     Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "back", tint = CyberPrimary)
                 }
                 Text(
-                    text = L10n.get("payment_gateway", lang),
+                    text = if (lang == "fa") "درگاه امن پرداخت تتر (USDT-TRC20)" else "USDT TRC20 Secure Portal",
                     color = CyberPrimary,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
@@ -2186,13 +1966,13 @@ fun PaymentScreen(viewModel: ForexViewModel) {
             }
         }
 
-        if (paySuccess) {
+        if (paymentSuccess) {
             item {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(1.dp, CyberGreen, RoundedCornerShape(12.dp))
-                        .background(CyberSurface, RoundedCornerShape(12.dp))
+                        .border(1.5.dp, CyberGreen, RoundedCornerShape(16.dp))
+                        .background(CyberSurface, RoundedCornerShape(16.dp))
                         .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -2204,467 +1984,357 @@ fun PaymentScreen(viewModel: ForexViewModel) {
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = L10n.get("success_pay", lang),
+                        text = if (lang == "fa") "پرداخت با موفقیت ثبت شد! 🎉" else "Payment registered successfully! 🎉",
                         color = CyberGreen,
-                        fontSize = 14.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = if (lang == "fa") {
+                            "سیگنال‌های ویژه بلافاصله باز شدند و عضویت شما در شبکه زنجیره بلوکی در حال تایید نهایی است."
+                        } else {
+                            "Pro features are instantly unlocked! Your transaction is currently being processed on the blockchain."
+                        },
+                        color = CyberTextSecondary,
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 18.sp
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     Button(
                         onClick = {
-                            viewModel.completeSubscription()
+                            viewModel.setScreen("dashboard")
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = CyberGreen),
-                        modifier = Modifier.fillMaxWidth()
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
-                        Text(text = if (lang == "fa") "تایید نهایی و بازگشت" else "Approve & Go Back", color = CyberObsidian, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = if (lang == "fa") "بازگشت به صفحه اصلی" else "Return to Home",
+                            color = CyberObsidian,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
         } else {
+            // Subscription Summary Ticket
             item {
-                // Subscription Summary Ticket
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 16.dp)
-                        .border(1.dp, CyberPrimary.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-                        .background(CyberSurface, RoundedCornerShape(12.dp))
-                        .padding(16.dp)
+                        .border(1.dp, CyberPrimary.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+                        .background(CyberSurface, RoundedCornerShape(16.dp))
+                        .padding(18.dp)
                 ) {
                     Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = pkg.name,
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(CyberGold.copy(alpha = 0.15f))
+                                    .border(1.dp, CyberGold, RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = if (lang == "fa") "${pkg.durationDays} روزه" else "${pkg.durationDays} Days",
+                                    color = CyberGold,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(14.dp))
+                        HorizontalDivider(color = CyberBorder.copy(alpha = 0.4f), thickness = 1.dp)
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Original Price Display
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = if (lang == "fa") "قیمت استاندارد" else "Standard Price", color = CyberTextSecondary, fontSize = 12.sp)
+                            Text(
+                                text = "$originalPrice USDT",
+                                color = if (hasDiscount) CyberTextMuted else CyberPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                style = if (hasDiscount) androidx.compose.ui.text.TextStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough) else androidx.compose.ui.text.TextStyle.Default
+                            )
+                        }
+
+                        // Coupon discount summary
+                        if (hasDiscount) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(
+                                    text = if (lang == "fa") "کد تخفیف اعمال شده" else "Discount Applied",
+                                    color = CyberGreen,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "-${appliedCoupon!!.discountPercent}%",
+                                    color = CyberGreen,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        HorizontalDivider(color = CyberBorder.copy(alpha = 0.4f), thickness = 1.dp)
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Final Payable Price
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = if (lang == "fa") "مبلغ نهایی قابل پرداخت" else "Net Total to Pay", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "$finalPrice USDT", color = CyberGold, fontSize = 18.sp, fontWeight = FontWeight.Black)
+                        }
+                    }
+                }
+            }
+
+            // Coupon Code Application Input Card
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
+                        .border(1.dp, CyberBorder, RoundedCornerShape(16.dp))
+                        .background(CyberSurface, RoundedCornerShape(16.dp))
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = if (lang == "fa") "کد تخفیف دارید؟" else "Have a Coupon Code?",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = couponCodeInput,
+                            onValueChange = { viewModel.couponCodeInput.value = it },
+                            placeholder = { Text("e.g. DISCOUNT20", color = CyberTextMuted, fontSize = 12.sp) },
+                            colors = TextFieldDefaults.colors(
+                                focusedTextColor = CyberTextPrimary,
+                                unfocusedTextColor = CyberTextSecondary,
+                                focusedContainerColor = CyberObsidian,
+                                unfocusedContainerColor = CyberObsidian,
+                                focusedIndicatorColor = CyberPrimary
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .weight(1.3f)
+                                .height(50.dp)
+                                .testTag("coupon_input_field")
+                        )
+
+                        Button(
+                            onClick = { viewModel.applyDiscountCoupon() },
+                            colors = ButtonDefaults.buttonColors(containerColor = CyberSecondary),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .weight(0.7f)
+                                .height(46.dp)
+                        ) {
+                            Text(
+                                text = if (lang == "fa") "اعمال" else "Apply",
+                                color = CyberObsidian,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+
+                    if (couponError != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(text = couponError!!, color = CyberRed, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    if (hasDiscount) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = CyberGreen, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (lang == "fa") "تخفیف با موفقیت اعمال شد!" else "Discount coupon applied successfully!",
+                                color = CyberGreen,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // TRON USDT TRC20 Gateway Core Address Panel
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.5.dp, CyberPrimary, RoundedCornerShape(16.dp))
+                        .background(CyberSurface, RoundedCornerShape(16.dp))
+                        .padding(18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = if (lang == "fa") "واریز مستقیم تتر به ولت سیستم" else "Transfer USDT to System Wallet",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    if (adminWallet == null) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(12.dp)) {
+                            CircularProgressIndicator(color = CyberPrimary, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = if (lang == "fa") "در حال لود آدرس امن شبکه..." else "Fetching active blockchain destination...",
+                                color = CyberTextSecondary,
+                                fontSize = 11.sp
+                            )
+                        }
+                    } else {
+                        val walletAddr = adminWallet!!.walletAddress
+
+                        // Draw Simulated QR code
+                        Box(
+                            modifier = Modifier
+                                .size(110.dp)
+                                .background(Color.White, RoundedCornerShape(8.dp))
+                                .border(2.dp, CyberPrimary, RoundedCornerShape(8.dp))
+                                .padding(8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val sizeVal = size.width
+                                val block = sizeVal / 5f
+                                drawRect(Color.Black, Offset(0f, 0f), androidx.compose.ui.geometry.Size(block * 1.8f, block * 1.8f))
+                                drawRect(Color.Black, Offset(block * 3.2f, 0f), androidx.compose.ui.geometry.Size(block * 1.8f, block * 1.8f))
+                                drawRect(Color.Black, Offset(0f, block * 3.2f), androidx.compose.ui.geometry.Size(block * 1.8f, block * 1.8f))
+                                drawRect(Color.Black, Offset(block * 2f, block * 2f), androidx.compose.ui.geometry.Size(block, block))
+                                drawRect(Color.Black, Offset(block * 3.2f, block * 3.2f), androidx.compose.ui.geometry.Size(block * 1.8f, block * 1.8f))
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
                         Text(
-                            text = if (lang == "fa") plan.titleFa else plan.titleEn,
-                            color = CyberPrimary,
-                            fontSize = 15.sp,
+                            text = if (lang == "fa") "آدرس ولت دریافت تتر (شبکه TRC-20)" else "USDT (TRC-20) Destination Address",
+                            color = CyberTextSecondary,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(6.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(text = if (lang == "fa") "مدت اشتراک" else "Period", color = CyberTextSecondary, fontSize = 12.sp)
-                            Text(text = "${plan.durationDays} " + (if (lang == "fa") "روز" else "Days"), color = CyberTextPrimary, fontSize = 12.sp)
-                        }
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(text = if (lang == "fa") "مبلغ نهایی" else "Total Amount", color = CyberTextSecondary, fontSize = 12.sp)
-                            Text(text = if (lang == "fa") plan.priceFa else plan.priceEn, color = CyberGold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
 
-            // Payment Methods Selector
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(CyberSurface, RoundedCornerShape(8.dp))
-                        .padding(4.dp)
-                        .padding(bottom = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    if (lang == "fa") {
-                        // Shetab cards option
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(if (method == "RIAL") CyberSurfaceVariant else Color.Transparent)
-                                .clickable { viewModel.setPaymentMethod("RIAL") }
-                                .padding(vertical = 10.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(text = "درگاه شتاب ریالی", color = if (method == "RIAL") CyberPrimary else CyberTextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                    } else {
-                        // GPay option
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(if (method == "GOOGLE_PAY") CyberSurfaceVariant else Color.Transparent)
-                                .clickable { viewModel.setPaymentMethod("GOOGLE_PAY") }
-                                .padding(vertical = 10.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(text = L10n.get("gpay", lang), color = if (method == "GOOGLE_PAY") CyberPrimary else CyberTextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                        // Visa option
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(if (method == "CARD") CyberSurfaceVariant else Color.Transparent)
-                                .clickable { viewModel.setPaymentMethod("CARD") }
-                                .padding(vertical = 10.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(text = L10n.get("visa", lang), color = if (method == "CARD") CyberPrimary else CyberTextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    // Crypto option (for both locales)
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (method == "CRYPTO") CyberSurfaceVariant else Color.Transparent)
-                            .clickable { viewModel.setPaymentMethod("CRYPTO") }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = if (lang == "fa") "تتر رمز ارز" else "Crypto (USDT)", color = if (method == "CRYPTO") CyberPrimary else CyberTextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            // Interactive Forms
-            item {
-                when (method) {
-                    "RIAL" -> {
-                        // SHEtab SHAPARAK iranian Bank gateway simulator
-                        Column(
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .border(1.dp, CyberBorder, RoundedCornerShape(12.dp))
-                                .background(CyberSurface, RoundedCornerShape(12.dp))
-                                .padding(16.dp)
+                                .background(CyberObsidian, RoundedCornerShape(8.dp))
+                                .border(1.dp, CyberBorder, RoundedCornerShape(8.dp))
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.AccountBalance, contentDescription = "Bank", tint = CyberPrimary)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = "سامانه شاپرک - شبکه الکترونیکی پرداخت بانکی", color = CyberTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            OutlinedTextField(
-                                value = rialCardNo,
-                                onValueChange = { if (it.length <= 16) rialCardNo = it },
-                                label = { Text(L10n.get("card_number", lang), color = CyberTextSecondary) },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                placeholder = { Text("6037-xxxx-xxxx-xxxx", color = CyberTextMuted) },
-                                colors = TextFieldDefaults.colors(
-                                    focusedTextColor = CyberTextPrimary,
-                                    unfocusedTextColor = CyberTextSecondary,
-                                    focusedContainerColor = CyberObsidian,
-                                    unfocusedContainerColor = CyberObsidian,
-                                    focusedIndicatorColor = CyberPrimary
-                                ),
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag("card_no_input")
+                            Text(
+                                text = walletAddr,
+                                color = CyberPrimary,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1.3f)
                             )
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                OutlinedTextField(
-                                    value = rialCvv2,
-                                    onValueChange = { if (it.length <= 4) rialCvv2 = it },
-                                    label = { Text(L10n.get("cvv2", lang), color = CyberTextSecondary) },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    colors = TextFieldDefaults.colors(
-                                        focusedTextColor = CyberTextPrimary,
-                                        focusedContainerColor = CyberObsidian,
-                                        unfocusedContainerColor = CyberObsidian,
-                                        focusedIndicatorColor = CyberPrimary
-                                    ),
-                                    modifier = Modifier.weight(1f).padding(vertical = 4.dp).testTag("cvv2_input")
-                                )
-
-                                Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    OutlinedTextField(
-                                        value = rialExpMonth,
-                                        onValueChange = { if (it.length <= 2) rialExpMonth = it },
-                                        label = { Text("ماه", color = CyberTextSecondary) },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        colors = TextFieldDefaults.colors(
-                                            focusedTextColor = CyberTextPrimary,
-                                            focusedContainerColor = CyberObsidian,
-                                            unfocusedContainerColor = CyberObsidian,
-                                            focusedIndicatorColor = CyberPrimary
-                                        ),
-                                        modifier = Modifier.weight(1f).padding(vertical = 4.dp)
-                                    )
-                                    OutlinedTextField(
-                                        value = rialExpYear,
-                                        onValueChange = { if (it.length <= 2) rialExpYear = it },
-                                        label = { Text("سال", color = CyberTextSecondary) },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        colors = TextFieldDefaults.colors(
-                                            focusedTextColor = CyberTextPrimary,
-                                            focusedContainerColor = CyberObsidian,
-                                            unfocusedContainerColor = CyberObsidian,
-                                            focusedIndicatorColor = CyberPrimary
-                                        ),
-                                        modifier = Modifier.weight(1f).padding(vertical = 4.dp)
-                                    )
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                OutlinedTextField(
-                                    value = rialOtp,
-                                    onValueChange = { if (it.length <= 6) rialOtp = it },
-                                    label = { Text(L10n.get("otp", lang), color = CyberTextSecondary) },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    colors = TextFieldDefaults.colors(
-                                        focusedTextColor = CyberTextPrimary,
-                                        focusedContainerColor = CyberObsidian,
-                                        unfocusedContainerColor = CyberObsidian,
-                                        focusedIndicatorColor = CyberPrimary
-                                    ),
-                                    modifier = Modifier.weight(1f).padding(vertical = 4.dp).testTag("otp_input")
-                                )
-
-                                Button(
-                                    onClick = { otpTimer = 120 },
-                                    enabled = otpTimer == 0,
-                                    colors = ButtonDefaults.buttonColors(containerColor = CyberSecondary),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.height(52.dp).padding(top = 4.dp)
-                                ) {
-                                    Text(
-                                        text = if (otpTimer > 0) "$otpTimer s" else L10n.get("get_otp", lang),
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = CyberObsidian
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
                             Button(
                                 onClick = {
-                                    if (rialCardNo.length < 16 || rialCvv2.length < 3 || rialOtp.isEmpty()) {
-                                        Toast.makeText(context, "اطلاعات کارت شتاب بانکی ناقص است", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        isVerifying = true
-                                    }
+                                    clipboard.setText(AnnotatedString(walletAddr))
+                                    Toast.makeText(context, L10n.get("copied", lang), Toast.LENGTH_SHORT).show()
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = CyberPrimary),
-                                modifier = Modifier.fillMaxWidth().height(48.dp)
-                            ) {
-                                if (isVerifying) {
-                                    CircularProgressIndicator(color = CyberObsidian, modifier = Modifier.size(24.dp))
-                                    LaunchedEffect(Unit) {
-                                        delay(2000)
-                                        isVerifying = false
-                                        paySuccess = true
-                                    }
-                                } else {
-                                    Text(text = L10n.get("pay_now", lang), color = CyberObsidian, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-
-                    "GOOGLE_PAY" -> {
-                        // Google pay simulation interface
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, CyberBorder, RoundedCornerShape(12.dp))
-                                .background(CyberSurface, RoundedCornerShape(12.dp))
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(text = "Fast Checkout with Google Wallet", color = CyberTextSecondary, fontSize = 12.sp)
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Button(
-                                onClick = {
-                                    isVerifying = true
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                                shape = RoundedCornerShape(24.dp),
-                                border = BorderStroke(1.dp, Color.LightGray),
-                                modifier = Modifier.fillMaxWidth().height(48.dp).testTag("google_pay_btn")
-                            ) {
-                                if (isVerifying) {
-                                    CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(24.dp))
-                                    LaunchedEffect(Unit) {
-                                        delay(1500)
-                                        isVerifying = false
-                                        paySuccess = true
-                                    }
-                                } else {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(imageVector = Icons.Default.Payment, contentDescription = "gpay", tint = Color.Black)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(text = "Pay with Google Pay", color = Color.Black, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    "CARD" -> {
-                        // English Credit Card form
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, CyberBorder, RoundedCornerShape(12.dp))
-                                .background(CyberSurface, RoundedCornerShape(12.dp))
-                                .padding(16.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.CreditCard, contentDescription = "Credit Card", tint = CyberPrimary)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = "Credit / Debit Card Secured Port", color = CyberTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            OutlinedTextField(
-                                value = visaCardNo,
-                                onValueChange = { if (it.length <= 16) visaCardNo = it },
-                                label = { Text("Card Number", color = CyberTextSecondary) },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberPrimary),
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag("visa_no_input")
-                            )
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                OutlinedTextField(
-                                    value = visaExpiry,
-                                    onValueChange = { visaExpiry = it },
-                                    label = { Text("Expiry (MM/YY)", color = CyberTextSecondary) },
-                                    colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberPrimary),
-                                    modifier = Modifier.weight(1f).padding(vertical = 4.dp)
-                                )
-                                OutlinedTextField(
-                                    value = visaCvv,
-                                    onValueChange = { if (it.length <= 3) visaCvv = it },
-                                    label = { Text("CVV/CVC", color = CyberTextSecondary) },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    colors = TextFieldDefaults.colors(focusedTextColor = CyberTextPrimary, focusedContainerColor = CyberObsidian, unfocusedContainerColor = CyberObsidian, focusedIndicatorColor = CyberPrimary),
-                                    modifier = Modifier.weight(1f).padding(vertical = 4.dp).testTag("visa_cvv_input")
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Button(
-                                onClick = {
-                                    if (visaCardNo.length < 16 || visaCvv.length < 3) {
-                                        Toast.makeText(context, "Please verify your card values", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        isVerifying = true
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = CyberPrimary),
-                                modifier = Modifier.fillMaxWidth().height(48.dp)
-                            ) {
-                                if (isVerifying) {
-                                    CircularProgressIndicator(color = CyberObsidian, modifier = Modifier.size(24.dp))
-                                    LaunchedEffect(Unit) {
-                                        delay(1500)
-                                        isVerifying = false
-                                        paySuccess = true
-                                    }
-                                } else {
-                                    Text(text = L10n.get("pay_now", lang), color = CyberObsidian, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-
-                    "CRYPTO" -> {
-                        // USDT TRC20 Wallet simulator
-                        val usdtWallet = "TY7K6p9fJn7NHeu65h4JdfT6m8fHkWvF3y"
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, CyberBorder, RoundedCornerShape(12.dp))
-                                .background(CyberSurface, RoundedCornerShape(12.dp))
-                                .padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(text = L10n.get("crypto_payment", lang), color = CyberTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // Draw a beautiful cyber-glowing simulated QR Code
-                            Box(
+                                colors = ButtonDefaults.buttonColors(containerColor = CyberSecondary.copy(alpha = 0.15f)),
+                                border = BorderStroke(1.dp, CyberSecondary),
+                                shape = RoundedCornerShape(6.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                 modifier = Modifier
-                                    .size(120.dp)
-                                    .background(Color.White, RoundedCornerShape(8.dp))
-                                    .border(2.dp, CyberPrimary, RoundedCornerShape(8.dp))
-                                    .padding(8.dp),
-                                contentAlignment = Alignment.Center
+                                    .height(28.dp)
+                                    .weight(0.7f)
                             ) {
-                                Canvas(modifier = Modifier.fillMaxSize()) {
-                                    // Simulated high tech QR blocks
-                                    val size = size.width
-                                    val block = size / 5f
-                                    drawRect(Color.Black, Offset(0f, 0f), androidx.compose.ui.geometry.Size(block * 2f, block * 2f))
-                                    drawRect(Color.Black, Offset(block * 3f, 0f), androidx.compose.ui.geometry.Size(block * 2f, block * 2f))
-                                    drawRect(Color.Black, Offset(0f, block * 3f), androidx.compose.ui.geometry.Size(block * 2f, block * 2f))
-                                    drawRect(Color.Black, Offset(block * 2f, block * 2f), androidx.compose.ui.geometry.Size(block, block))
-                                    drawRect(Color.Black, Offset(block * 3f, block * 3f), androidx.compose.ui.geometry.Size(block * 2f, block * 2f))
-                                }
+                                Text(text = L10n.get("copy", lang), color = CyberSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             }
+                        }
 
-                            Spacer(modifier = Modifier.height(14.dp))
-                            Text(text = L10n.get("wallet_addr", lang), color = CyberTextSecondary, fontSize = 10.sp)
-                            Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
+                        HorizontalDivider(color = CyberBorder.copy(alpha = 0.4f), thickness = 1.dp)
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(CyberObsidian, RoundedCornerShape(6.dp))
-                                    .border(1.dp, CyberBorder, RoundedCornerShape(6.dp))
-                                    .padding(10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                        // TXID Hash Submission
+                        Text(
+                            text = if (lang == "fa") "شناسه تراکنش واریز شده (TXID)" else "Completed Transaction Hash (TXID)",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.align(Alignment.Start)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = txidInput,
+                            onValueChange = { viewModel.txidInput.value = it },
+                            placeholder = { Text("Paste transaction hash (hash / ID) here...", color = CyberTextMuted, fontSize = 12.sp) },
+                            colors = TextFieldDefaults.colors(
+                                focusedTextColor = CyberTextPrimary,
+                                unfocusedTextColor = CyberTextSecondary,
+                                focusedContainerColor = CyberObsidian,
+                                unfocusedContainerColor = CyberObsidian,
+                                focusedIndicatorColor = CyberPrimary
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                                .testTag("txid_input_field")
+                        )
+
+                        if (paymentError != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(text = paymentError!!, color = CyberRed, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Button(
+                            onClick = { viewModel.submitTronTransactionReceipt() },
+                            colors = ButtonDefaults.buttonColors(containerColor = CyberPrimary),
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !paymentProcessing,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("verify_crypto_btn")
+                        ) {
+                            if (paymentProcessing) {
+                                CircularProgressIndicator(color = CyberObsidian, modifier = Modifier.size(24.dp))
+                            } else {
                                 Text(
-                                    text = "TY7K6p...WvF3y",
-                                    color = CyberPrimary,
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold
+                                    text = if (lang == "fa") "بررسی تراکنش و فعال‌سازی اشتراک" else "Verify Transaction & Activate",
+                                    color = CyberObsidian,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 13.sp
                                 )
-                                Button(
-                                    onClick = {
-                                        clipboard.setText(AnnotatedString(usdtWallet))
-                                        Toast.makeText(context, L10n.get("copied", lang), Toast.LENGTH_SHORT).show()
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = CyberSecondary.copy(alpha = 0.2f)),
-                                    border = BorderStroke(1.dp, CyberSecondary),
-                                    shape = RoundedCornerShape(4.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                    modifier = Modifier.height(26.dp)
-                                ) {
-                                    Text(text = L10n.get("copy", lang), color = CyberSecondary, fontSize = 9.sp)
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Button(
-                                onClick = {
-                                    isVerifying = true
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = CyberPrimary),
-                                modifier = Modifier.fillMaxWidth().height(48.dp).testTag("verify_crypto_btn")
-                            ) {
-                                if (isVerifying) {
-                                    CircularProgressIndicator(color = CyberObsidian, modifier = Modifier.size(24.dp))
-                                    LaunchedEffect(Unit) {
-                                        delay(2500)
-                                        isVerifying = false
-                                        paySuccess = true
-                                    }
-                                } else {
-                                    Text(text = L10n.get("verify_tx", lang), color = CyberObsidian, fontWeight = FontWeight.Bold)
-                                }
                             }
                         }
                     }
