@@ -176,7 +176,7 @@ object SupabaseService {
                 // Try to create profile in profiles table just in case trigger is slow or not configured
                 val isFirstUser = email.lowercase() == "asalary40@gmail.com"
                 val role = if (isFirstUser) "admin" else "user"
-                createInitialProfile(id, role)
+                createInitialProfile(id, role, token)
 
                 AuthResponse(id, emailVal, token)
             } catch (e: Exception) {
@@ -221,14 +221,14 @@ object SupabaseService {
         }
     }
 
-    private suspend fun createInitialProfile(id: String, role: String): Boolean {
+    private suspend fun createInitialProfile(id: String, role: String, accessToken: String? = null): Boolean {
         val payload = JSONObject().apply {
             put("id", id)
             put("role", role)
             put("is_vip", false)
             put("vip_expiry", null)
         }.toString()
-        val result = makePostRequest("/rest/v1/profiles", payload)
+        val result = makePostRequest("/rest/v1/profiles", payload, accessToken)
         return result != null
     }
 
