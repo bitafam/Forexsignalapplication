@@ -494,4 +494,40 @@ object SupabaseService {
         }.toString()
         return makePatchRequest("/rest/v1/profiles?id=eq.$userId", payload)
     }
+
+    suspend fun updateUserCredentials(accessToken: String, email: String?, password: String?): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val url = "$SUPABASE_URL/auth/v1/user"
+                val jsonPayload = JSONObject().apply {
+                    if (!email.isNullOrBlank()) {
+                        put("email", email)
+                    }
+                    if (!password.isNullOrBlank()) {
+                        put("password", password)
+                    }
+                }.toString()
+
+                val request = Request.Builder()
+                    .url(url)
+                    .addHeader("apikey", ANON_KEY)
+                    .addHeader("Authorization", "Bearer $accessToken")
+                    .addHeader("Content-Type", "application/json")
+                    .put(jsonPayload.toRequestBody(jsonMediaType))
+                    .build()
+
+                val response = client.newCall(request).execute()
+                val body = response.body?.string()
+                if (response.isSuccessful) {
+                    true
+                } else {
+                    Log.e(TAG, "PUT request to /auth/v1/user failed: $body")
+                    false
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "updateUserCredentials exception: ${e.message}", e)
+                false
+            }
+        }
+    }
 }

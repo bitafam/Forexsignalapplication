@@ -48,6 +48,18 @@ class ForexRepository(private val forexDao: ForexDao) {
         }
     }
 
+    suspend fun deleteUser(email: String) {
+        withContext(Dispatchers.IO) {
+            forexDao.deleteUser(email)
+        }
+    }
+
+    suspend fun updateUserVip(email: String, isVip: Boolean, expiresAt: Long) {
+        withContext(Dispatchers.IO) {
+            forexDao.updateUserVip(email, isVip, expiresAt)
+        }
+    }
+
     suspend fun authenticateUser(email: String, passwordHash: String): UserEntity? {
         return withContext(Dispatchers.IO) {
             val user = forexDao.getUser(email)

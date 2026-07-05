@@ -97,38 +97,7 @@ class MainActivity : ComponentActivity() {
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // 1. HOME
-                                val homeActive = currentScreen == "dashboard"
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(if (homeActive) CyberPrimary.copy(alpha = 0.12f) else Color.Transparent)
-                                        .clickable { viewModel.setScreen("dashboard") }
-                                        .padding(vertical = 10.dp, horizontal = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Home,
-                                            contentDescription = "Home",
-                                            tint = if (homeActive) CyberPrimary else CyberTextSecondary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = if (currentLanguage == "fa") "خانه" else "Home",
-                                            color = if (homeActive) CyberPrimary else CyberTextSecondary,
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Black
-                                        )
-                                    }
-                                }
-
-                                // 2. BILLING (SUBSCRIPTION)
+                                // 1. BILLING (Left)
                                 val billingActive = currentScreen == "payment"
                                 Box(
                                     modifier = Modifier
@@ -171,7 +140,50 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
 
-                                // 3. SETTINGS & PROFILE
+                                // 2. HOME (Center - Raised, Glowing, Circular Distinct Styling)
+                                val homeActive = currentScreen == "dashboard"
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1.2f)
+                                        .offset(y = (-10).dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            brush = Brush.radialGradient(
+                                                colors = if (homeActive) listOf(CyberPrimary, CyberGold) else listOf(CyberSurface, CyberObsidian)
+                                            )
+                                        )
+                                        .border(
+                                            BorderStroke(
+                                                2.dp,
+                                                if (homeActive) CyberGold else CyberPrimary.copy(alpha = 0.6f)
+                                            ),
+                                            CircleShape
+                                        )
+                                        .clickable { viewModel.setScreen("dashboard") }
+                                        .padding(vertical = 12.dp, horizontal = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Home,
+                                            contentDescription = "Home",
+                                            tint = if (homeActive) CyberObsidian else CyberPrimary,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = if (currentLanguage == "fa") "خانه" else "Home",
+                                            color = if (homeActive) CyberObsidian else CyberPrimary,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Black
+                                        )
+                                    }
+                                }
+
+                                // 3. SETTINGS & PROFILE (Right)
                                 val settingsActive = currentScreen == "settings" || currentScreen == "login" || currentScreen == "register"
                                 Box(
                                     modifier = Modifier
@@ -378,7 +390,6 @@ fun DashboardScreen(viewModel: ForexViewModel) {
     val currentUser by viewModel.currentUser.collectAsState()
     val signals by viewModel.allSignals.collectAsState()
     val filter by viewModel.signalFilter.collectAsState()
-    var activeTab by remember { mutableStateOf("ACTIVE") } // ACTIVE or HISTORY
 
     LazyColumn(
         modifier = Modifier
@@ -465,43 +476,31 @@ fun DashboardScreen(viewModel: ForexViewModel) {
             UserProfileCard(viewModel, lang, currentUser)
         }
 
-        // Signal Tabs Selector (Active vs History - Polished Style)
+        // Trading Journal Card based on signal data (Permanent and Responsive)
         item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .background(CyberSurface, RoundedCornerShape(16.dp))
-                    .border(BorderStroke(1.dp, CyberBorder), RoundedCornerShape(16.dp))
-                    .padding(6.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                listOf("ACTIVE", "HISTORY").forEach { tab ->
-                    val isSelected = activeTab == tab
-                    val textKey = if (tab == "ACTIVE") "active_signals" else "history_signals"
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isSelected) CyberPrimary else Color.Transparent)
-                            .clickable { activeTab = tab }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = L10n.get(textKey, lang),
-                            color = if (isSelected) CyberObsidian else CyberTextSecondary,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 13.sp
-                        )
-                    }
-                }
-            }
+            JournalPerformanceCard(signals, lang)
         }
 
-        if (activeTab == "HISTORY") {
-            item {
-                JournalPerformanceCard(signals, lang)
+        // Section header for Gold Signals
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = if (lang == "fa") "سیگنال‌های انس طلا (XAU/USD)" else "Gold (XAU/USD) Trading Signals",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Black
+                )
+                Text(
+                    text = if (lang == "fa") "تحلیل و موقعیت‌های معاملاتی طلا" else "GOLD MARKET POSITION ANALYTICS",
+                    color = CyberPrimary,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
             }
         }
 
@@ -560,20 +559,20 @@ fun DashboardScreen(viewModel: ForexViewModel) {
             }
         }
 
-        // Signal Items List
+        // Signal Items List (Active first, then Closed, sorted descending by ID)
         val filteredSignals = signals.filter { sig ->
-            // Filter by Active Tab vs History
-            val matchesTab = if (activeTab == "ACTIVE") sig.status == "ACTIVE" else sig.status != "ACTIVE"
-            // Filter by Free vs VIP
-            val matchesFilter = when (filter) {
+            when (filter) {
                 "FREE" -> !sig.isVip
                 "VIP" -> sig.isVip
                 else -> true
             }
-            matchesTab && matchesFilter
         }
+        val sortedSignals = filteredSignals.sortedWith(
+            compareByDescending<SignalEntity> { it.status == "ACTIVE" }
+                .thenByDescending { it.id }
+        )
 
-        if (filteredSignals.isEmpty()) {
+        if (sortedSignals.isEmpty()) {
             item {
                 Box(
                     modifier = Modifier
@@ -598,7 +597,7 @@ fun DashboardScreen(viewModel: ForexViewModel) {
                 }
             }
         } else {
-            items(filteredSignals) { signal ->
+            items(sortedSignals) { signal ->
                 SignalItemCard(signal, viewModel, lang, currentUser)
             }
         }
@@ -781,6 +780,13 @@ fun UserProfileCard(viewModel: ForexViewModel, lang: String, currentUser: UserEn
                         Spacer(modifier = Modifier.height(2.dp))
                         
                         // Beautiful Badge Layout
+                        val remainingDays = if (currentUser?.vipExpiresAt != null && currentUser.vipExpiresAt > System.currentTimeMillis()) {
+                            val diff = (currentUser.vipExpiresAt - System.currentTimeMillis()) / (1000L * 60 * 60 * 24)
+                            if (diff == 0L) 1L else diff
+                        } else {
+                            0L
+                        }
+
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
@@ -800,7 +806,9 @@ fun UserProfileCard(viewModel: ForexViewModel, lang: String, currentUser: UserEn
                         ) {
                             Text(
                                 text = if (isAdmin) L10n.get("admin_badge", lang)
-                                       else if (isVip) L10n.get("vip_badge", lang)
+                                       else if (isVip) {
+                                           if (lang == "fa") "عضو VIP ($remainingDays روز باقی‌مانده)" else "VIP ($remainingDays Days Left)"
+                                       }
                                        else if (currentUser != null) (if (lang == "fa") "کاربر معمولی" else "Standard Operator")
                                        else L10n.get("guest", lang),
                                 color = if (isAdmin) CyberPrimary else if (isVip) CyberGold else CyberTextSecondary,
@@ -831,6 +839,22 @@ fun UserProfileCard(viewModel: ForexViewModel, lang: String, currentUser: UserEn
                     }
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // User Settings/Edit Credentials Button
+                        IconButton(
+                            onClick = { viewModel.setScreen("settings") },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(CyberSurfaceVariant, RoundedCornerShape(10.dp))
+                                .border(1.dp, CyberBorder.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Profile Settings",
+                                tint = CyberPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
                         if (isAdmin) {
                             IconButton(
                                 onClick = { viewModel.setScreen("admin_panel") },
@@ -840,13 +864,14 @@ fun UserProfileCard(viewModel: ForexViewModel, lang: String, currentUser: UserEn
                                     .border(1.dp, CyberBorder.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Settings,
+                                    imageVector = Icons.Default.AdminPanelSettings,
                                     contentDescription = "Admin setting",
-                                    tint = CyberPrimary,
+                                    tint = CyberGold,
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
+
                         IconButton(
                             onClick = { viewModel.handleLogout() },
                             modifier = Modifier
@@ -858,67 +883,6 @@ fun UserProfileCard(viewModel: ForexViewModel, lang: String, currentUser: UserEn
                                 imageVector = Icons.Default.Logout,
                                 contentDescription = "Logout",
                                 tint = CyberRed,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Subscription offering plans
-            if (!isAdmin && !isVip) {
-                Spacer(modifier = Modifier.height(18.dp))
-                HorizontalDivider(color = CyberBorder.copy(alpha = 0.5f), thickness = 1.dp)
-                Spacer(modifier = Modifier.height(14.dp))
-                
-                Text(
-                    text = if (lang == "fa") "عضویت در کانال سیگنال‌های VIP با موفقیت بالا" else "Unlock daily precision signals by joining our VIP channels",
-                    color = CyberTextSecondary,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    lineHeight = 16.sp
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-
-                val packages by viewModel.supabasePackages.collectAsState()
-                packages.forEach { pkg ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 5.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(CyberSurfaceVariant.copy(alpha = 0.4f))
-                            .border(1.dp, CyberBorder.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
-                            .clickable { viewModel.selectSupabasePackage(pkg) }
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = pkg.name,
-                                color = CyberTextPrimary,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = if (lang == "fa") "${pkg.durationDays} روز دسترسی نامحدود" else "${pkg.durationDays} Days Unlimited Access",
-                                color = CyberTextMuted,
-                                fontSize = 10.sp
-                            )
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "${pkg.priceTether} USDT",
-                                color = CyberGold,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Black,
-                                modifier = Modifier.padding(end = 8.dp)
-                            )
-                            Icon(
-                                imageVector = Icons.Default.ChevronRight,
-                                contentDescription = "Buy",
-                                tint = CyberPrimary,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -2135,12 +2099,82 @@ fun RegisterScreen(viewModel: ForexViewModel) {
                     .testTag("register_password_input")
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Rules & Risk warnings box
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(85.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(CyberSurfaceVariant.copy(alpha = 0.4f))
+                    .border(BorderStroke(1.dp, CyberBorder.copy(alpha = 0.5f)), RoundedCornerShape(10.dp))
+                    .padding(8.dp)
+            ) {
+                LazyColumn {
+                    item {
+                        Text(
+                            text = if (lang == "fa") {
+                                "⚠️ بیانیه ریسک معامله طلا:\nمعاملات انس جهانی طلا (XAU/USD) دارای ریسک بسیار بالایی است. تمام سیگنال‌ها و تحلیل‌های ارائه‌شده صرفاً جهت آموزش و راهنمایی تکنیکال هستند و این برنامه هیچ‌گونه مسئولیتی در قبال سود یا ضرر مالی شما نمی‌پذیرد. مدیریت سرمایه الزامی است."
+                            } else {
+                                "⚠️ Gold Trading Risk Warning:\nTrading Spot Gold (XAU/USD) involves substantial risk of loss. Our signals are for educational purposes and tech references. We bear absolutely zero responsibility for your trading performance."
+                            },
+                            color = CyberTextSecondary,
+                            fontSize = 9.sp,
+                            lineHeight = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Checkbox to accept Rules and Risks
+            val context = LocalContext.current
+            var rulesAccepted by remember { mutableStateOf(false) }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { rulesAccepted = !rulesAccepted },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Start
+            ) {
+                Checkbox(
+                    checked = rulesAccepted,
+                    onCheckedChange = { rulesAccepted = it },
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = CyberPrimary,
+                        uncheckedColor = CyberBorder,
+                        checkmarkColor = CyberObsidian
+                    )
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (lang == "fa") "قوانین و سلب مسئولیت ریسک طلا را می‌پذیرم" else "I accept the Gold Trading Risk & Rules",
+                    color = CyberTextPrimary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Action Button
             Button(
-                onClick = { viewModel.handleRegister() },
-                colors = ButtonDefaults.buttonColors(containerColor = CyberPrimary),
+                onClick = {
+                    if (rulesAccepted) {
+                        viewModel.handleRegister()
+                    } else {
+                        Toast.makeText(context, if (lang == "fa") "لطفاً ابتدا قوانین را بپذیرید" else "Please accept the rules first", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                enabled = rulesAccepted,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = CyberPrimary,
+                    disabledContainerColor = CyberBorder.copy(alpha = 0.2f)
+                ),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2149,7 +2183,7 @@ fun RegisterScreen(viewModel: ForexViewModel) {
             ) {
                 Text(
                     text = L10n.get("register", lang),
-                    color = CyberObsidian,
+                    color = if (rulesAccepted) CyberObsidian else CyberTextSecondary,
                     fontWeight = FontWeight.Black,
                     fontSize = 14.sp
                 )
@@ -2611,6 +2645,177 @@ fun PaymentScreen(viewModel: ForexViewModel) {
     }
 }
 
+@Composable
+fun BatteryOptimizationBanner(lang: String) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val powerManager = remember { context.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager }
+    var isIgnored by remember {
+        mutableStateOf(
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                powerManager.isIgnoringBatteryOptimizations(context.packageName)
+            } else {
+                true
+            }
+        )
+    }
+
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val runnable = object : Runnable {
+            override fun run() {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    isIgnored = powerManager.isIgnoringBatteryOptimizations(context.packageName)
+                }
+                if (!isIgnored) {
+                    handler.postDelayed(this, 2000)
+                }
+            }
+        }
+        handler.post(runnable)
+        onDispose {
+            handler.removeCallbacks(runnable)
+        }
+    }
+
+    if (!isIgnored) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(CyberRed.copy(alpha = 0.12f))
+                .border(BorderStroke(1.2.dp, CyberRed), RoundedCornerShape(16.dp))
+                .padding(16.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.BatteryAlert,
+                        contentDescription = null,
+                        tint = CyberRed,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        text = if (lang == "fa") "مجوز اجرای بدون محدودیت در پس‌زمینه" else "Unrestricted Background Permission",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+
+                Text(
+                    text = if (lang == "fa") {
+                        "برای دریافت نوتیفیکیشن‌های آنی سیگنال‌های طلا و جلوگیری از تاخیر اندروید، برنامه باید اجازه بهینه‌سازی مصرف باتری آزاد داشته باشد. لطفا روی کلید زیر کلیک کنید و در پاپ‌آپ سیستم گزینه Allow (مجاز) را انتخاب نمایید."
+                    } else {
+                        "To receive prompt gold signal pushes without system standby delays, please grant unrestricted battery usage permission. Tap below and choose Allow on the prompt."
+                    },
+                    color = CyberTextSecondary,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp
+                )
+
+                Button(
+                    onClick = {
+                        try {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                                val intent = android.content.Intent().apply {
+                                    action = android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+                                    data = android.net.Uri.parse("package:${context.packageName}")
+                                }
+                                context.startActivity(intent)
+                            }
+                        } catch (e: Exception) {
+                            try {
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                                    val intent = android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                    context.startActivity(intent)
+                                }
+                            } catch (err: Exception) {
+                                Toast.makeText(context, "Error launching battery settings", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CyberRed),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth().height(36.dp)
+                ) {
+                    Text(
+                        text = if (lang == "fa") "رفع محدودیت مصرف باتری سیستم" else "Disable Optimization limits",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ExpandableInfoCard(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconColor: Color,
+    content: @Composable () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(CyberSurface)
+            .border(BorderStroke(1.dp, if (expanded) CyberPrimary.copy(alpha = 0.6f) else CyberBorder), RoundedCornerShape(20.dp))
+            .clickable { expanded = !expanded }
+            .padding(18.dp)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(iconColor.copy(alpha = 0.12f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = iconColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Text(
+                        text = title,
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Icon(
+                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = CyberTextSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            if (expanded) {
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(color = CyberBorder.copy(alpha = 0.3f), thickness = 1.dp)
+                Spacer(modifier = Modifier.height(14.dp))
+                content()
+            }
+        }
+    }
+}
+
 // 7.5. SETTINGS SCREEN (ACCOUNTS, LANGUAGE, & NOTIFICATION PERMISSIONS)
 @Composable
 fun SettingsScreen(viewModel: ForexViewModel) {
@@ -2670,6 +2875,11 @@ fun SettingsScreen(viewModel: ForexViewModel) {
                     letterSpacing = 1.sp
                 )
             }
+        }
+
+        // Battery Optimization Warning Banner
+        item {
+            BatteryOptimizationBanner(lang = lang)
         }
 
         // Account status profile card
@@ -2974,6 +3184,204 @@ fun SettingsScreen(viewModel: ForexViewModel) {
                             )
                         }
                     }
+                }
+            }
+        }
+
+        // Account Credentials Edit Section
+        if (currentUser != null) {
+            item {
+                var editEmail by remember { mutableStateOf("") }
+                var editPassword by remember { mutableStateOf("") }
+                val successMsg by viewModel.authSuccessMessage.collectAsState()
+                val errorMsg by viewModel.authError.collectAsState()
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(CyberSurface)
+                        .border(BorderStroke(1.dp, CyberBorder), RoundedCornerShape(20.dp))
+                        .padding(20.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .background(CyberPrimary.copy(alpha = 0.1f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = CyberPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = if (lang == "fa") "تغییر ایمیل و رمز عبور" else "Change Email & Password",
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = if (lang == "fa") "به‌روزرسانی امن و مستقیم اطلاعات حساب" else "SECURE DIRECT PROFILE RE-CREDENTIALS",
+                                    color = CyberTextSecondary,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = if (lang == "fa") "فیلدهای زیر را پر کنید. برای هر کدام که قصد تغییر ندارید، فیلد مربوطه را خالی رها کنید." else "Leave fields blank if you do not want to change them.",
+                            color = CyberTextSecondary,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp
+                        )
+
+                        // Email Field
+                        OutlinedTextField(
+                            value = editEmail,
+                            onValueChange = { editEmail = it },
+                            label = { Text(if (lang == "fa") "ایمیل جدید" else "New Email Address", fontSize = 11.sp, color = CyberTextSecondary) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = CyberTextPrimary,
+                                unfocusedTextColor = CyberTextPrimary,
+                                focusedBorderColor = CyberPrimary,
+                                unfocusedBorderColor = CyberBorder,
+                                focusedLabelColor = CyberPrimary,
+                                unfocusedLabelColor = CyberTextSecondary
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+
+                        // Password Field
+                        OutlinedTextField(
+                            value = editPassword,
+                            onValueChange = { editPassword = it },
+                            label = { Text(if (lang == "fa") "رمز عبور جدید (حداقل ۶ کاراکتر)" else "New Password (min 6 chars)", fontSize = 11.sp, color = CyberTextSecondary) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = CyberTextPrimary,
+                                unfocusedTextColor = CyberTextPrimary,
+                                focusedBorderColor = CyberPrimary,
+                                unfocusedBorderColor = CyberBorder,
+                                focusedLabelColor = CyberPrimary,
+                                unfocusedLabelColor = CyberTextSecondary
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                        )
+
+                        if (successMsg != null) {
+                            Text(
+                                text = successMsg ?: "",
+                                color = CyberGreen,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        if (errorMsg != null) {
+                            Text(
+                                text = errorMsg ?: "",
+                                color = CyberRed,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                viewModel.updateCredentials(
+                                    newEmail = if (editEmail.isNotBlank()) editEmail else null,
+                                    newPassword = if (editPassword.isNotBlank()) editPassword else null
+                                )
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = CyberPrimary),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().height(44.dp)
+                        ) {
+                            Text(
+                                text = if (lang == "fa") "بروزرسانی اطلاعات حساب کاربری" else "Update Credentials",
+                                color = CyberObsidian,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Rules Section
+        item {
+            ExpandableInfoCard(
+                title = if (lang == "fa") "قوانین و ریسک‌های معاملات طلا" else "Trading Rules & Risks Disclosure",
+                icon = Icons.Default.Gavel,
+                iconColor = CyberPrimary
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = if (lang == "fa") {
+                            "۱. نوسانات طلا: بازار اونس طلا (XAU/USD) به شدت پرنوسان است و اخبار ژئوپلیتیک و اقتصادی به سرعت بر آن تاثیر می‌گذارد.\n\n" +
+                            "۲. استفاده از اهرم مناسب: هیچ‌گاه با سرمایه حیاتی خود وارد معامله نشوید و حتماً حجم معاملاتی (لات) معقولی انتخاب کنید.\n\n" +
+                            "۳. سلب مسئولیت: تمام سیگنال‌های منتشر شده در این پلتفرم صرفاً نظرات تحلیلگران فنی بوده و تضمینی برای سود ۱۰۰ درصدی وجود ندارد. سود یا ضرر نهایی به عهده کاربر است.\n\n" +
+                            "۴. پایبندی به حد ضرر: فعال شدن حد ضرر (SL) بخشی از کار با بازارهای مالی است؛ هرگز حد ضرر یک معامله فعال را جابجا نکنید."
+                        } else {
+                            "1. Volatility Risk: Spot Gold (XAU/USD) is extremely volatile. Rapid fluctuations happen near economic releases.\n\n" +
+                            "2. Leverage Safety: Do not trade with crucial life savings. Keep lot sizes rational.\n\n" +
+                            "3. Disclaimer: Signals provided are strictly algorithmic & technical suggestions. Past success does not guarantee future results. Trader is fully responsible for risk.\n\n" +
+                            "4. Stop Loss Discipline: Hit SL is normal. Never move or widen your SL on an active open position."
+                        },
+                        color = CyberTextSecondary,
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // Help Section
+        item {
+            ExpandableInfoCard(
+                title = if (lang == "fa") "راهنمای استفاده و معرفی بخش‌ها" else "App Guide & Documentation",
+                icon = Icons.Default.HelpCenter,
+                iconColor = CyberGold
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = if (lang == "fa") "بخش‌های کلیدی برنامه طلا:" else "Key Application Features:",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    
+                    Text(
+                        text = if (lang == "fa") {
+                            "📌 داشبورد اصلی (خانه):\nدر این صفحه سیگنال‌های فعال انس طلا را مشاهده می‌کنید. هر سیگنال شامل جهت معامله (خرید/فروش)، قیمت ورود (EP)، حد ضرر (SL) و اهداف حد سود (TP) می‌باشد.\n\n" +
+                            "📈 جورنال معاملاتی طلا:\nدر زیر بخش پروفایل، کارنامه عملکرد سیگنال‌های قبلی را مشاهده می‌کنید که درصد موفقیت و کل پیپ‌های کسب شده را ثبت کرده است.\n\n" +
+                            "🔔 دریافت سریع اعلان‌ها:\nبرای عقب نماندن از سیگنال‌های لحظه‌ای، باید حتماً دسترسی به نوتیفیکیشن‌ها و همچنین مجوز بدون محدودیت باتری (Unrestricted Battery) را از همین صفحه تنظیمات صادر نمایید.\n\n" +
+                            "📌 اشتراک ویژه (VIP):\nجهت باز کردن قفل سیگنال‌های ویژه با درصد موفقیت بالا، از طریق داشبورد پکیج‌های اشتراک را مشاهده نمایید."
+                        } else {
+                            "📌 Main Dashboard:\nDisplays real-time Gold (XAU/USD) signals including Direction (BUY/SELL), Entry Price (EP), Stop Loss (SL), and Take Profit (TP) targets.\n\n" +
+                            "📈 Gold Performance Journal:\nDirectly below the user profile card, view the analytical summary of previous signal performance including win rates & total pips captured.\n\n" +
+                            "🔔 Prompt Notifications:\nTo guarantee background notification arrival, activate Post Notifications and Unrestricted Battery optimization toggles in Settings.\n\n" +
+                            "📌 Premium VIP:\nAccess high-probability exclusive gold signals by joining one of our affordable monthly subscription packages."
+                        },
+                        color = CyberTextSecondary,
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }

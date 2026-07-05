@@ -17,5 +17,6 @@ data class SignalEntity(
     val timestamp: Long = System.currentTimeMillis(),
     val isVip: Boolean = false,
     val analysis: String = "",
-    val adminName: String = "Nexis Core"
+    val adminName: String = "Gold Core",
+    val orderType: String = "INSTANT" // "INSTANT", "LIMIT", "STOP"
 )

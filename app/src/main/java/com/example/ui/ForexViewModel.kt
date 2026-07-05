@@ -801,4 +801,45 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
     fun dismissLiveNotification() {
         _liveNotification.value = null
     }
+
+    fun updateCredentials(newEmail: String?, newPassword: String?) {
+        val token = _accessToken.value
+        val user = _currentUser.value
+        if (token == null || user == null) {
+            _authError.value = if (_language.value == "fa") "شما وارد حساب خود نشده‌اید" else "You are not logged in"
+            return
+        }
+
+        viewModelScope.launch {
+            _authError.value = null
+            _authSuccessMessage.value = null
+            try {
+                // Call Supabase update credentials
+                val success = SupabaseService.updateUserCredentials(token, newEmail, newPassword)
+                if (success) {
+                    // Update locally as well
+                    val updatedEmail = if (!newEmail.isNullOrBlank()) newEmail.trim() else user.email
+                    val updatedPasswordHash = if (!newPassword.isNullOrBlank()) newPassword.trim() else user.passwordHash
+                    
+                    val updatedUser = user.copy(
+                        email = updatedEmail,
+                        passwordHash = updatedPasswordHash
+                    )
+                    
+                    if (!newEmail.isNullOrBlank()) {
+                        repository.deleteUser(user.email) // delete old email record if changed
+                    }
+                    repository.registerUser(updatedEmail, updatedPasswordHash, updatedUser.role, updatedUser.id)
+                    repository.updateUserVip(updatedEmail, updatedUser.isVip, updatedUser.vipExpiresAt)
+                    
+                    _currentUser.value = updatedUser
+                    _authSuccessMessage.value = if (_language.value == "fa") "اطلاعات حساب با موفقیت بروزرسانی شد" else "Account credentials updated successfully!"
+                } else {
+                    _authError.value = if (_language.value == "fa") "خطا در بروزرسانی اطلاعات در سرور (رمز عبور باید حداقل ۶ کاراکتر باشد)" else "Failed to update credentials on server (Password must be min 6 characters)"
+                }
+            } catch (e: Exception) {
+                _authError.value = e.message ?: "Error"
+            }
+        }
+    }
 }

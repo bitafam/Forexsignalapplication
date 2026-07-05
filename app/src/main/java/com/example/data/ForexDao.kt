@@ -29,6 +29,9 @@ interface ForexDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUser(user: UserEntity)
 
+    @Query("DELETE FROM users WHERE email = :email")
+    suspend fun deleteUser(email: String)
+
     @Query("UPDATE users SET isVip = :isVip, vipExpiresAt = :expiresAt WHERE email = :email")
     suspend fun updateUserVip(email: String, isVip: Boolean, expiresAt: Long)
 
