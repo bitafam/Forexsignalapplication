@@ -148,6 +148,20 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
                 previousCount = list.size
             }
         }
+        // Real-time polling loop to synchronize signals with Supabase
+        viewModelScope.launch {
+            while (true) {
+                try {
+                    val remote = SupabaseService.getSignals()
+                    if (remote.isNotEmpty()) {
+                        repository.syncSignalsFromSupabase(remote)
+                    }
+                } catch (e: Exception) {
+                    Log.e("ForexViewModel", "Real-time signals polling error: ${e.message}")
+                }
+                delay(7000) // Poll every 7 seconds for real-time delivery
+            }
+        }
         // Prefetch data from Supabase immediately
         refreshSupabaseData()
     }
@@ -292,6 +306,33 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun handleForgotPassword(email: String) {
+        if (email.isBlank()) {
+            _authError.value = if (_language.value == "fa") "لطفا ایمیل خود را وارد کنید" else "Please enter your email address"
+            return
+        }
+        viewModelScope.launch {
+            _authError.value = null
+            _authSuccessMessage.value = null
+            val success = SupabaseService.recoverPassword(email.trim())
+            if (success) {
+                _authSuccessMessage.value = if (_language.value == "fa") {
+                    "لینک بازیابی رمز عبور به ایمیل شما ارسال شد!"
+                } else {
+                    "Password recovery link sent to your email!"
+                }
+                delay(3000)
+                _authSuccessMessage.value = null
+            } else {
+                _authError.value = if (_language.value == "fa") {
+                    "خطایی در ارسال لینک بازیابی رخ داد. لطفا ایمیل را بررسی کرده یا دوباره تلاش کنید."
+                } else {
+                    "Error sending recovery link. Please verify email and try again."
+                }
+            }
+        }
+    }
+
     fun handleRegister() {
         viewModelScope.launch {
             _authError.value = null
@@ -408,7 +449,7 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
     // USER CHECKOUT FLOW & COUPON SYSTEM
     // ==========================================
 
-    fun selectSupabasePackage(pkg: SupabaseService.SupabasePackage) {
+    fun selectSupabasePackage(pkg: SupabaseService.SupabasePackage?) {
         _selectedPackage.value = pkg
         _appliedCoupon.value = null
         _couponError.value = null
@@ -416,7 +457,9 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
         _paymentSuccess.value = false
         _paymentError.value = null
         couponCodeInput.value = ""
-        setScreen("payment")
+        if (pkg != null) {
+            setScreen("payment")
+        }
     }
 
     fun applyDiscountCoupon() {
@@ -621,7 +664,8 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ==========================================
-    // LOCAL ROOM SIGNALS ACTIONS (Keep existing)
+    // ==========================================
+    // SUPABASE-SYNCHRONIZED SIGNALS ACTIONS
     // ==========================================
     fun publishAdminSignal() {
         val user = _currentUser.value
@@ -660,28 +704,56 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
                 adminName = edit?.adminName ?: (user.email.split("@").firstOrNull() ?: "Admin")
             )
 
-            repository.insertSignal(newSignal)
-            _authSuccessMessage.value = if (_language.value == "fa") {
-                if (edit != null) "سیگنال با موفقیت ویرایش و اصلاح شد!" else "سیگنال با موفقیت ارسال شد!"
+            val success = if (edit != null) {
+                SupabaseService.updateFullSignalInSupabase(newSignal)
             } else {
-                if (edit != null) "Signal updated successfully!" else "Signal Published Successfully!"
+                SupabaseService.createSignal(newSignal)
+            }
+
+            if (success) {
+                val remoteSignals = SupabaseService.getSignals()
+                if (remoteSignals.isNotEmpty()) {
+                    repository.syncSignalsFromSupabase(remoteSignals)
+                }
+                _authSuccessMessage.value = if (_language.value == "fa") {
+                    if (edit != null) "سیگنال با موفقیت ویرایش و اصلاح شد!" else "سیگنال با موفقیت ارسال شد!"
+                } else {
+                    if (edit != null) "Signal updated successfully!" else "Signal Published Successfully!"
+                }
+                cancelEditing()
+            } else {
+                _authError.value = if (_language.value == "fa") "خطا در ثبت سیگنال در Supabase" else "Failed to register signal on Supabase"
             }
             
-            cancelEditing()
             delay(1500)
             _authSuccessMessage.value = null
+            _authError.value = null
         }
     }
 
     fun updateSignalStatus(id: Int, status: String) {
         viewModelScope.launch {
-            repository.updateSignalStatus(id, status)
+            val success = SupabaseService.updateSignalStatusInSupabase(id, status)
+            if (success) {
+                val remoteSignals = SupabaseService.getSignals()
+                if (remoteSignals.isNotEmpty()) {
+                    repository.syncSignalsFromSupabase(remoteSignals)
+                }
+            } else {
+                repository.updateSignalStatus(id, status)
+            }
         }
     }
 
     fun deleteSignal(id: Int) {
         viewModelScope.launch {
-            repository.deleteSignal(id)
+            val success = SupabaseService.deleteSignalFromSupabase(id)
+            if (success) {
+                val remoteSignals = SupabaseService.getSignals()
+                repository.syncSignalsFromSupabase(remoteSignals)
+            } else {
+                repository.deleteSignal(id)
+            }
         }
     }
 
@@ -810,12 +882,33 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
+        if (newEmail == null && newPassword == null) {
+            _authError.value = if (_language.value == "fa") "هیچ تغییری برای اعمال وجود ندارد" else "No changes to apply"
+            return
+        }
+
+        if (newEmail != null) {
+            val trimmedEmail = newEmail.trim()
+            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches()) {
+                _authError.value = if (_language.value == "fa") "آدرس ایمیل وارد شده نامعتبر است" else "The email address format is invalid"
+                return
+            }
+        }
+
+        if (newPassword != null) {
+            val trimmedPassword = newPassword.trim()
+            if (trimmedPassword.length < 6) {
+                _authError.value = if (_language.value == "fa") "رمز عبور جدید باید حداقل ۶ کاراکتر باشد" else "New password must be at least 6 characters"
+                return
+            }
+        }
+
         viewModelScope.launch {
             _authError.value = null
             _authSuccessMessage.value = null
             try {
                 // Call Supabase update credentials
-                val success = SupabaseService.updateUserCredentials(token, newEmail, newPassword)
+                val success = SupabaseService.updateUserCredentials(token, newEmail?.trim(), newPassword?.trim())
                 if (success) {
                     // Update locally as well
                     val updatedEmail = if (!newEmail.isNullOrBlank()) newEmail.trim() else user.email
@@ -835,7 +928,7 @@ class ForexViewModel(application: Application) : AndroidViewModel(application) {
                     _currentUser.value = updatedUser
                     _authSuccessMessage.value = if (_language.value == "fa") "اطلاعات حساب با موفقیت بروزرسانی شد" else "Account credentials updated successfully!"
                 } else {
-                    _authError.value = if (_language.value == "fa") "خطا در بروزرسانی اطلاعات در سرور (رمز عبور باید حداقل ۶ کاراکتر باشد)" else "Failed to update credentials on server (Password must be min 6 characters)"
+                    _authError.value = if (_language.value == "fa") "خطا در بروزرسانی اطلاعات در سرور (پسورد باید حداقل ۶ کاراکتر باشد یا سرور در دسترس نیست)" else "Failed to update credentials on server"
                 }
             } catch (e: Exception) {
                 _authError.value = e.message ?: "Error"

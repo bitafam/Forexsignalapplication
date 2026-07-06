@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.SignalEntity
 import com.example.data.UserEntity
+import com.example.data.SupabaseService
 import com.example.ui.ForexViewModel
 import com.example.ui.theme.*
 import kotlinx.coroutines.delay
@@ -97,23 +98,19 @@ class MainActivity : ComponentActivity() {
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // 1. BILLING (Left)
-                                val billingActive = currentScreen == "payment"
+                                // 1. BILLING / ADMIN PANEL (Left)
+                                val isAdmin = currentUser?.role == "ADMIN"
+                                val billingActive = if (isAdmin) currentScreen == "admin_panel" else currentScreen == "payment"
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
                                         .clip(RoundedCornerShape(16.dp))
                                         .background(if (billingActive) CyberPrimary.copy(alpha = 0.12f) else Color.Transparent)
                                         .clickable {
-                                            val currentPkg = viewModel.selectedPackage.value
-                                            if (currentPkg == null) {
-                                                val pkgs = viewModel.supabasePackages.value
-                                                if (pkgs.isNotEmpty()) {
-                                                    viewModel.selectSupabasePackage(pkgs.first())
-                                                } else {
-                                                    viewModel.setScreen("dashboard")
-                                                }
+                                            if (isAdmin) {
+                                                viewModel.setScreen("admin_panel")
                                             } else {
+                                                viewModel.selectSupabasePackage(null) // clear selected package to show cards first!
                                                 viewModel.setScreen("payment")
                                             }
                                         }
@@ -125,14 +122,18 @@ class MainActivity : ComponentActivity() {
                                         verticalArrangement = Arrangement.Center
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.AccountBalanceWallet,
-                                            contentDescription = "Billing",
+                                            imageVector = if (isAdmin) Icons.Default.AddChart else Icons.Default.AccountBalanceWallet,
+                                            contentDescription = if (isAdmin) "Admin Panel" else "Billing",
                                             tint = if (billingActive) CyberPrimary else CyberTextSecondary,
                                             modifier = Modifier.size(20.dp)
                                         )
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Text(
-                                            text = if (currentLanguage == "fa") "اشتراک ویژه" else "Billing",
+                                            text = if (currentLanguage == "fa") {
+                                                if (isAdmin) "مدیریت سیگنال" else "اشتراک ویژه"
+                                            } else {
+                                                if (isAdmin) "Admin Panel" else "Billing"
+                                            },
                                             color = if (billingActive) CyberPrimary else CyberTextSecondary,
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Black
@@ -1924,7 +1925,25 @@ fun LoginScreen(viewModel: ForexViewModel) {
                     .testTag("login_password_input")
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Forgot Password Option
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Text(
+                    text = if (lang == "fa") "فراموشی رمز عبور؟" else "Forgot Password?",
+                    color = CyberPrimary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .clickable { viewModel.handleForgotPassword(email) }
+                        .padding(vertical = 6.dp, horizontal = 2.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Action Button
             Button(
@@ -2231,7 +2250,204 @@ fun PaymentScreen(viewModel: ForexViewModel) {
     val context = LocalContext.current
 
     if (selectedPackage == null) {
-        viewModel.setScreen("dashboard")
+        val pkgs by viewModel.supabasePackages.collectAsState()
+        val defaultPkgs = listOf(
+            SupabaseService.SupabasePackage(id = "1", name = if (lang == "fa") "عضویت نقره‌ای (سی‌روزه)" else "Silver Membership (30-Day)", durationDays = 30, priceTether = 19.99),
+            SupabaseService.SupabasePackage(id = "2", name = if (lang == "fa") "عضویت طلایی (نودروزه)" else "Gold Membership (90-Day)", durationDays = 90, priceTether = 49.99),
+            SupabaseService.SupabasePackage(id = "3", name = if (lang == "fa") "عضویت برلیان (یکساله)" else "Brilliant VIP (365-Day)", durationDays = 365, priceTether = 149.99)
+        )
+        val finalPkgs: List<SupabaseService.SupabasePackage> = if (pkgs.isNotEmpty()) pkgs else defaultPkgs
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Transparent)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { viewModel.setScreen("dashboard") }) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "back", tint = CyberPrimary)
+                    }
+                    Text(
+                        text = if (lang == "fa") "پلن‌های اشتراک ویژه" else "VIP Membership Plans",
+                        color = CyberPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = if (lang == "fa") "عضویت ویژه Nexis Gold" else "Nexis Gold Premium Club",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (lang == "fa") "انتخاب اشتراک برای دسترسی آنی به سیگنال‌های الگوریتمی" else "CHOOSE A PLAN FOR INSTANT BLOCKCHAIN SIGNALS",
+                    color = CyberTextSecondary,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            items(finalPkgs) { p ->
+                val index = finalPkgs.indexOf(p)
+                val borderGlow = when (index) {
+                    0 -> listOf(CyberSecondary.copy(alpha = 0.5f), CyberBorder)
+                    1 -> listOf(CyberGold.copy(alpha = 0.6f), CyberGold.copy(alpha = 0.2f))
+                    else -> listOf(CyberPrimary.copy(alpha = 0.7f), CyberTertiary.copy(alpha = 0.3f))
+                }
+                val iconColor = when (index) {
+                    0 -> CyberSecondary
+                    1 -> CyberGold
+                    else -> CyberPrimary
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(CyberSurface)
+                        .border(BorderStroke(1.2.dp, Brush.linearGradient(borderGlow)), RoundedCornerShape(22.dp))
+                        .clickable { viewModel.selectSupabasePackage(p) }
+                        .padding(20.dp)
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .background(iconColor.copy(alpha = 0.1f), CircleShape)
+                                        .border(1.dp, iconColor, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (index == 1) Icons.Default.WorkspacePremium else Icons.Default.Star,
+                                        contentDescription = null,
+                                        tint = iconColor,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Text(
+                                    text = p.name,
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(iconColor.copy(alpha = 0.15f))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = if (lang == "fa") "${p.durationDays} روزه" else "${p.durationDays} Days",
+                                    color = iconColor,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        val bullets = if (lang == "fa") {
+                            listOf(
+                                "دسترسی کامل به سیگنال‌های VIP طلا و ارزها",
+                                "نوتیفیکیشن‌های آنی تلگرام و اپلیکیشن",
+                                "تحلیل‌های پیوست شده چارت تکنیکال",
+                                "پشتیبانی تخصصی ۲۴ ساعته ادمین"
+                            )
+                        } else {
+                            listOf(
+                                "Full VIP spot gold and forex signals",
+                                "Lightning push app & Telegram notifications",
+                                "Detailed charts & technical analysis attached",
+                                "Dedicated 24/7 priority support desk"
+                            )
+                        }
+
+                        bullets.forEach { bullet ->
+                            Row(
+                                modifier = Modifier.padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(5.dp)
+                                        .background(iconColor, CircleShape)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = bullet,
+                                    color = CyberTextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = if (lang == "fa") "قیمت کل اشتراک" else "TOTAL PRICE",
+                                    color = CyberTextSecondary,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${p.priceTether} USDT",
+                                    color = iconColor,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Black,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+
+                            Button(
+                                onClick = { viewModel.selectSupabasePackage(p) },
+                                colors = ButtonDefaults.buttonColors(containerColor = iconColor),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                                modifier = Modifier.height(36.dp)
+                            ) {
+                                Text(
+                                    text = if (lang == "fa") "انتخاب و پرداخت" else "Select & Pay",
+                                    color = CyberObsidian,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
         return
     }
 
@@ -2254,7 +2470,7 @@ fun PaymentScreen(viewModel: ForexViewModel) {
                 horizontalArrangement = Arrangement.Start,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { viewModel.setScreen("dashboard") }) {
+                IconButton(onClick = { viewModel.selectSupabasePackage(null) }) {
                     Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "back", tint = CyberPrimary)
                 }
                 Text(
@@ -2994,6 +3210,139 @@ fun SettingsScreen(viewModel: ForexViewModel) {
             }
         }
 
+        // Account Credentials Edit Section (UserProfile & Security)
+        if (currentUser != null) {
+            item {
+                var editEmail by remember { mutableStateOf("") }
+                var editPassword by remember { mutableStateOf("") }
+                val successMsg by viewModel.authSuccessMessage.collectAsState()
+                val errorMsg by viewModel.authError.collectAsState()
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(CyberSurface)
+                        .border(BorderStroke(1.dp, CyberBorder), RoundedCornerShape(20.dp))
+                        .padding(20.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .background(CyberPrimary.copy(alpha = 0.1f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = CyberPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = if (lang == "fa") "پروفایل کاربری و امنیت حساب" else "User Profile & Security Settings",
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = if (lang == "fa") "به‌روزرسانی امن مشخصات و تغییر ایمیل و رمز عبور" else "SECURE DIRECT PROFILE RE-CREDENTIALS",
+                                    color = CyberTextSecondary,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = if (lang == "fa") "جهت ویرایش مشخصات فیلدهای زیر را پر کنید. مواردی که قصد تغییر ندارید را خالی رها کنید." else "Fill fields to edit your profile. Leave blank for no change.",
+                            color = CyberTextSecondary,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp
+                        )
+
+                        // Email Field
+                        OutlinedTextField(
+                            value = editEmail,
+                            onValueChange = { editEmail = it },
+                            label = { Text(if (lang == "fa") "ایمیل جدید" else "New Email Address", fontSize = 11.sp, color = CyberTextSecondary) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = CyberTextPrimary,
+                                unfocusedTextColor = CyberTextPrimary,
+                                focusedBorderColor = CyberPrimary,
+                                unfocusedBorderColor = CyberBorder,
+                                focusedLabelColor = CyberPrimary,
+                                unfocusedLabelColor = CyberTextSecondary
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+
+                        // Password Field
+                        OutlinedTextField(
+                            value = editPassword,
+                            onValueChange = { editPassword = it },
+                            label = { Text(if (lang == "fa") "رمز عبور جدید (حداقل ۶ کاراکتر)" else "New Password (min 6 chars)", fontSize = 11.sp, color = CyberTextSecondary) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = CyberTextPrimary,
+                                unfocusedTextColor = CyberTextPrimary,
+                                focusedBorderColor = CyberPrimary,
+                                unfocusedBorderColor = CyberBorder,
+                                focusedLabelColor = CyberPrimary,
+                                unfocusedLabelColor = CyberTextSecondary
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                        )
+
+                        if (successMsg != null) {
+                            Text(
+                                text = successMsg ?: "",
+                                color = CyberGreen,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        if (errorMsg != null) {
+                            Text(
+                                text = errorMsg ?: "",
+                                color = CyberRed,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                viewModel.updateCredentials(
+                                    newEmail = if (editEmail.isNotBlank()) editEmail else null,
+                                    newPassword = if (editPassword.isNotBlank()) editPassword else null
+                                )
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = CyberPrimary),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().height(44.dp)
+                        ) {
+                            Text(
+                                text = if (lang == "fa") "بروزرسانی اطلاعات حساب کاربری" else "Update Credentials",
+                                color = CyberObsidian,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Notification Access Toggle Card (Requested)
         item {
             Box(
@@ -3188,138 +3537,7 @@ fun SettingsScreen(viewModel: ForexViewModel) {
             }
         }
 
-        // Account Credentials Edit Section
-        if (currentUser != null) {
-            item {
-                var editEmail by remember { mutableStateOf("") }
-                var editPassword by remember { mutableStateOf("") }
-                val successMsg by viewModel.authSuccessMessage.collectAsState()
-                val errorMsg by viewModel.authError.collectAsState()
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(CyberSurface)
-                        .border(BorderStroke(1.dp, CyberBorder), RoundedCornerShape(20.dp))
-                        .padding(20.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .background(CyberPrimary.copy(alpha = 0.1f), CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = null,
-                                    tint = CyberPrimary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                            Column {
-                                Text(
-                                    text = if (lang == "fa") "تغییر ایمیل و رمز عبور" else "Change Email & Password",
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = if (lang == "fa") "به‌روزرسانی امن و مستقیم اطلاعات حساب" else "SECURE DIRECT PROFILE RE-CREDENTIALS",
-                                    color = CyberTextSecondary,
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.sp
-                                )
-                            }
-                        }
-
-                        Text(
-                            text = if (lang == "fa") "فیلدهای زیر را پر کنید. برای هر کدام که قصد تغییر ندارید، فیلد مربوطه را خالی رها کنید." else "Leave fields blank if you do not want to change them.",
-                            color = CyberTextSecondary,
-                            fontSize = 11.sp,
-                            lineHeight = 16.sp
-                        )
-
-                        // Email Field
-                        OutlinedTextField(
-                            value = editEmail,
-                            onValueChange = { editEmail = it },
-                            label = { Text(if (lang == "fa") "ایمیل جدید" else "New Email Address", fontSize = 11.sp, color = CyberTextSecondary) },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = CyberTextPrimary,
-                                unfocusedTextColor = CyberTextPrimary,
-                                focusedBorderColor = CyberPrimary,
-                                unfocusedBorderColor = CyberBorder,
-                                focusedLabelColor = CyberPrimary,
-                                unfocusedLabelColor = CyberTextSecondary
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        // Password Field
-                        OutlinedTextField(
-                            value = editPassword,
-                            onValueChange = { editPassword = it },
-                            label = { Text(if (lang == "fa") "رمز عبور جدید (حداقل ۶ کاراکتر)" else "New Password (min 6 chars)", fontSize = 11.sp, color = CyberTextSecondary) },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = CyberTextPrimary,
-                                unfocusedTextColor = CyberTextPrimary,
-                                focusedBorderColor = CyberPrimary,
-                                unfocusedBorderColor = CyberBorder,
-                                focusedLabelColor = CyberPrimary,
-                                unfocusedLabelColor = CyberTextSecondary
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
-                        )
-
-                        if (successMsg != null) {
-                            Text(
-                                text = successMsg ?: "",
-                                color = CyberGreen,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        if (errorMsg != null) {
-                            Text(
-                                text = errorMsg ?: "",
-                                color = CyberRed,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        Button(
-                            onClick = {
-                                viewModel.updateCredentials(
-                                    newEmail = if (editEmail.isNotBlank()) editEmail else null,
-                                    newPassword = if (editPassword.isNotBlank()) editPassword else null
-                                )
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = CyberPrimary),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth().height(44.dp)
-                        ) {
-                            Text(
-                                text = if (lang == "fa") "بروزرسانی اطلاعات حساب کاربری" else "Update Credentials",
-                                color = CyberObsidian,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                        }
-                    }
-                }
-            }
-        }
 
         // Rules Section
         item {

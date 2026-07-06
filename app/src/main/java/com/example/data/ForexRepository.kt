@@ -91,11 +91,44 @@ class ForexRepository(private val forexDao: ForexDao) {
         }
     }
 
+    suspend fun syncSignalsFromSupabase(remoteSignals: List<SignalEntity>) {
+        withContext(Dispatchers.IO) {
+            val localList = forexDao.getAllSignals().firstOrNull() ?: emptyList()
+            val localMap = localList.associateBy { it.id }
+
+            for (remote in remoteSignals) {
+                val local = localMap[remote.id]
+                if (local == null) {
+                    forexDao.insertSignal(remote)
+                } else if (local.status != remote.status || 
+                           local.pair != remote.pair || 
+                           local.entryPrice != remote.entryPrice || 
+                           local.tp1 != remote.tp1 || 
+                           local.tp2 != remote.tp2 || 
+                           local.sl != remote.sl || 
+                           local.isVip != remote.isVip || 
+                           local.analysis != remote.analysis) {
+                    forexDao.insertSignal(remote)
+                }
+            }
+
+            val remoteIds = remoteSignals.map { it.id }.toSet()
+            if (remoteSignals.isNotEmpty()) {
+                for (local in localList) {
+                    // Only delete signals that were synchronized from remote but are now deleted on remote.
+                    // If local signal has id = 0, or is not in remote but we have remote signals, remove it.
+                    if (!remoteIds.contains(local.id)) {
+                        forexDao.deleteSignal(local.id)
+                    }
+                }
+            }
+        }
+    }
+
     suspend fun prepopulateInitialSignals() {
         withContext(Dispatchers.IO) {
-            // Check if database already has signals
             val current = allSignals.firstOrNull() ?: emptyList()
-            if (false) {
+            if (current.isEmpty()) {
                 // Populate default Free and VIP signals
                 val initial = listOf(
                     SignalEntity(

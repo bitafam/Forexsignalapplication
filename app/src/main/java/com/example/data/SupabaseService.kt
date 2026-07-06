@@ -530,4 +530,101 @@ object SupabaseService {
             }
         }
     }
+
+    // ==========================================
+    // 8. SIGNALS CRUD (Real-time compatible)
+    // ==========================================
+    suspend fun getSignals(): List<SignalEntity> {
+        val responseBody = makeGetRequest("/rest/v1/signals?order=id.desc")
+        if (responseBody == null) return emptyList()
+        return try {
+            val list = mutableListOf<SignalEntity>()
+            val arr = JSONArray(responseBody)
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(
+                    SignalEntity(
+                        id = obj.getInt("id"),
+                        pair = obj.getString("pair"),
+                        type = obj.getString("type"),
+                        entryPrice = obj.getDouble("entry_price"),
+                        tp1 = obj.getDouble("tp1"),
+                        tp2 = obj.getDouble("tp2"),
+                        sl = obj.getDouble("sl"),
+                        timeframe = obj.getString("timeframe"),
+                        status = obj.getString("status"),
+                        timestamp = obj.getLong("timestamp"),
+                        isVip = obj.getBoolean("is_vip"),
+                        analysis = obj.optString("analysis", ""),
+                        adminName = obj.optString("admin_name", "Admin")
+                    )
+                )
+            }
+            list
+        } catch (e: Exception) {
+            Log.e(TAG, "Parse signals error: ${e.message}", e)
+            emptyList()
+        }
+    }
+
+    suspend fun createSignal(signal: SignalEntity): Boolean {
+        val payload = JSONObject().apply {
+            put("pair", signal.pair)
+            put("type", signal.type)
+            put("entry_price", signal.entryPrice)
+            put("tp1", signal.tp1)
+            put("tp2", signal.tp2)
+            put("sl", signal.sl)
+            put("timeframe", signal.timeframe)
+            put("status", signal.status)
+            put("timestamp", signal.timestamp)
+            put("is_vip", signal.isVip)
+            put("analysis", signal.analysis)
+            put("admin_name", signal.adminName)
+        }.toString()
+        val response = makePostRequest("/rest/v1/signals", payload)
+        return response != null
+    }
+
+    suspend fun updateFullSignalInSupabase(signal: SignalEntity): Boolean {
+        val payload = JSONObject().apply {
+            put("pair", signal.pair)
+            put("type", signal.type)
+            put("entry_price", signal.entryPrice)
+            put("tp1", signal.tp1)
+            put("tp2", signal.tp2)
+            put("sl", signal.sl)
+            put("timeframe", signal.timeframe)
+            put("status", signal.status)
+            put("is_vip", signal.isVip)
+            put("analysis", signal.analysis)
+        }.toString()
+        return makePatchRequest("/rest/v1/signals?id=eq.${signal.id}", payload)
+    }
+
+    suspend fun updateSignalStatusInSupabase(id: Int, status: String): Boolean {
+        val payload = JSONObject().apply {
+            put("status", status)
+        }.toString()
+        return makePatchRequest("/rest/v1/signals?id=eq.$id", payload)
+    }
+
+    suspend fun deleteSignalFromSupabase(id: Int): Boolean {
+        return makeDeleteRequest("/rest/v1/signals?id=eq.$id")
+    }
+
+    suspend fun recoverPassword(email: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val jsonPayload = JSONObject().apply {
+                    put("email", email)
+                }.toString()
+                val response = makePostRequest("/auth/v1/recover", jsonPayload)
+                response != null
+            } catch (e: Exception) {
+                Log.e(TAG, "recoverPassword exception: ${e.message}", e)
+                false
+            }
+        }
+    }
 }
